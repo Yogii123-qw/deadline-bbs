@@ -17,7 +17,8 @@ import type {
 import type { CombatRoundResult } from '../game/catacomb.js';
 import type { FileEntry } from '../shared/types.js';
 import type { SearchResult } from '../boards/search.js';
-import { bold, clearScreen, color, reset, stripAnsi } from '../telnet/ansi.js';
+import type { LiveEvent } from '../server/live.js';
+import { bold, clearScreen, color, reset, sanitizeUserText, stripAnsi } from '../telnet/ansi.js';
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -174,6 +175,7 @@ export function mainMenu(handle: string, elapsed: string, width: number = DEFAUL
     `  ${color(33)}3${reset()}  CATACOMB — door game`,
     `  ${color(33)}4${reset()}  Hall of Fame`,
     `  ${color(33)}5${reset()}  Who's Online`,
+    `  ${color(33)}6${reset()}  Chat with a caller online`,
     `  ${color(33)}G${reset()}  Goodbye (log off)`,
     '',
     'Choice: ',
@@ -415,6 +417,75 @@ export function hallOfFameScreen(
   lines.push('  Press Enter to return to the main menu.');
   lines.push('');
   lines.push('Continue: ');
+  return lines.join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* Live notices and chat                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Collapse user-derived text to one display line: sanitizeUserText keeps
+ * LF/CR, and a crafted remote subject or chat message must never inject
+ * fake terminal lines into another caller's screen.
+ */
+function oneLine(text: string): string {
+  return sanitizeUserText(text).replace(/[\r\n\t]+/g, ' ');
+}
+
+/**
+ * Render one live event as the notice other callers see inline. Pure
+ * function; every user-derived field is re-sanitized here even though
+ * senders validated it (defense in depth — federated content arrives
+ * from other nodes). No trailing newline: the transport frames it.
+ * Colors reuse only pairs already on other screens (cyan tag, bold
+ * handle, default body text).
+ */
+export function renderLiveNotice(event: LiveEvent): string {
+  const tag = `${color(36)}» LIVE:${reset()}`;
+  const who = `${bold()}${oneLine(event.handle)}${reset()}`;
+  switch (event.kind) {
+    case 'post': {
+      const via =
+        event.originNode !== undefined ? ` (via node ${oneLine(event.originNode)})` : '';
+      const what = event.isReply ? 'replied to' : 'posted';
+      return `${tag} ${who} ${what} "${oneLine(event.subject)}" in ${oneLine(event.boardName)}${via}`;
+    }
+    case 'victory':
+      return `${tag} ${who} slew the Crypt Lord (level ${event.level})! The Hall of Fame has a new name.`;
+    case 'join':
+      return `${tag} ${who} just called in (${event.transport}).`;
+    case 'leave':
+      return `${tag} ${who} hung up.`;
+    case 'chat':
+      return `${color(36)}» CHAT from ${who}:${reset()} ${oneLine(event.message)}\n  Reply with: 6 ${oneLine(event.handle)} <message>`;
+  }
+}
+
+/**
+ * Chat help: who is online right now and the one-shot syntax. Ends with a
+ * blank line; the engine appends the main menu after it.
+ */
+export function chatHelpScreen(
+  sessions: ActiveSession[],
+  width: number = DEFAULT_WIDTH,
+): string {
+  const lines = ['', bar('CHAT — LIVE, CALLER TO CALLER', width), ''];
+  lines.push('  Send a private message to a caller who is online right now.');
+  lines.push('  Usage: 6 <handle> <message>');
+  lines.push('');
+  if (sessions.length <= 1) {
+    lines.push('  You are the only caller online right now.');
+  } else {
+    lines.push(`  ${sessions.length} callers online:`);
+    lines.push('');
+    for (const s of sessions) {
+      lines.push(`  ${bold()}${s.handle}${reset()} — ${s.transport}`);
+    }
+  }
+  lines.push('');
+  lines.push('  The message appears on their screen immediately, on either transport.');
+  lines.push('');
   return lines.join('\n');
 }
 

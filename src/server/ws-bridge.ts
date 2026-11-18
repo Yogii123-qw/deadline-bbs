@@ -6,7 +6,7 @@
  * Zod; every other text frame is raw terminal input.
  */
 
-import { WebSocketServer, type WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 import { LineReader } from '../session/input.js';
 import {
   newSession,
@@ -14,8 +14,9 @@ import {
   redrawGreeting,
   type EngineDeps,
 } from '../session/engine.js';
-import { formatElapsed } from '../session/screens.js';
+import { formatElapsed, renderLiveNotice } from '../session/screens.js';
 import { zResizeFrame } from '../shared/validation.js';
+import { buildLiveFrame, trailingPrompt, type LiveEvent } from './live.js';
 import { toCRLF } from './telnet.js';
 
 const PASSCODE_PHASES = new Set(['PASSCODE_PROMPT', 'CONFIRM_PASSCODE']);
@@ -34,17 +35,44 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
   let cleanedUp = false;
   let sawInput = false;
   let redrew = false;
+  let currentPrompt = '';
 
   const cleanup = (): void => {
     if (cleanedUp) return;
     cleanedUp = true;
-    deps.activeSessions.delete(state.id);
+    const wasOnline = deps.activeSessions.delete(state.id);
+    if (wasOnline && state.handle !== null) {
+      deps.live?.publish({ kind: 'leave', fromId: state.id, handle: state.handle });
+    }
+    deps.live?.unsubscribe(state.id);
     if (state.handle !== null) {
       onLog(
         `Call ended: ${state.handle} (${state.transport}, ${formatElapsed(state.connectedAt, deps.now())})`,
       );
     }
   };
+
+  // Live delivery: same contract as the telnet transport — through the
+  // per-connection chain, gated on still being online, prompt + partial
+  // input redrawn, input buffer untouched.
+  const deliverLive = (event: LiveEvent): void => {
+    chain = chain
+      .then(() => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        if (!deps.activeSessions.has(state.id)) return;
+        const frame = buildLiveFrame(
+          renderLiveNotice(event),
+          currentPrompt,
+          lineReader.pendingInput(),
+          PASSCODE_PHASES.has(state.phase),
+        );
+        ws.send(toCRLF(frame));
+      })
+      .catch((err: unknown) => {
+        onLog(`WebSocket live delivery error: ${err instanceof Error ? err.message : String(err)}`);
+      });
+  };
+  deps.live?.subscribe(state.id, deliverLive);
 
   ws.on('error', (err) => {
     onLog(`WebSocket error: ${err.message}`);
@@ -88,10 +116,12 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
       ws.send('\r\n  !! Line too long. Keep lines under 1024 characters.\r\n');
     }
     for (const line of lines) {
+      currentPrompt = '';
       const out = await processInput({ state, input: line, deps });
       state = out.state;
       if (out.output !== '') {
         ws.send(toCRLF(out.output));
+        currentPrompt = trailingPrompt(out.output);
       }
       if (state.phase === 'LOGOFF') {
         ws.close();
@@ -114,6 +144,7 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
       state = out.state;
       if (out.output !== '') {
         ws.send(toCRLF(out.output));
+        currentPrompt = trailingPrompt(out.output);
       }
     })
     .catch((err: unknown) => {

@@ -28,6 +28,15 @@ export class LineReader {
   private swallowNextLf = false;
   private overflowed = false;
 
+  /**
+   * Text typed so far on the current, not-yet-submitted line. Transports
+   * read it to re-echo partial input after a live notice; the buffer
+   * itself is never modified here.
+   */
+  public pendingInput(): string {
+    return this.buffer;
+  }
+
   public feed(text: string, mode: EchoMode): FeedResult {
     const lines: string[] = [];
     let echo = '';

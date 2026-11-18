@@ -32,6 +32,7 @@ import { stripAnsi } from '../src/telnet/ansi.js';
 
 export interface TestEnv {
   deps: EngineDeps;
+  root: string;
   dataDir: string;
   filesDir: string;
   warnings: string[];
@@ -41,10 +42,13 @@ export interface TestEnv {
   cleanup: () => Promise<void>;
 }
 
-export async function createTestEnv(files?: Record<string, string>): Promise<TestEnv> {
-  const root = await mkdtemp(path.join(tmpdir(), 'deadline-test-'));
-  const dataDir = path.join(root, 'data');
-  const filesDir = path.join(root, 'files');
+export async function createTestEnv(
+  files?: Record<string, string>,
+  reuse?: { root: string; dataDir: string; filesDir: string },
+): Promise<TestEnv> {
+  const root = reuse?.root ?? (await mkdtemp(path.join(tmpdir(), 'deadline-test-')));
+  const dataDir = reuse?.dataDir ?? path.join(root, 'data');
+  const filesDir = reuse?.filesDir ?? path.join(root, 'files');
   await mkdir(dataDir, { recursive: true });
   await mkdir(filesDir, { recursive: true });
   for (const [name, content] of Object.entries(files ?? {})) {
@@ -93,6 +97,7 @@ export async function createTestEnv(files?: Record<string, string>): Promise<Tes
 
   return {
     deps,
+    root,
     dataDir,
     filesDir,
     warnings,

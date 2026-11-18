@@ -15,7 +15,8 @@ import {
   redrawGreeting,
   type EngineDeps,
 } from '../session/engine.js';
-import { formatElapsed } from '../session/screens.js';
+import { formatElapsed, renderLiveNotice } from '../session/screens.js';
+import { buildLiveFrame, trailingPrompt, type LiveEvent } from './live.js';
 
 /** Engine output uses "\n"; telnet clients need CRLF. */
 export function toCRLF(output: string): string {
@@ -48,16 +49,45 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<Running
     let chain: Promise<void> = Promise.resolve();
     let sawInput = false;
     let redrew = false;
+    let currentPrompt = '';
 
     const cleanup = (): void => {
       sockets.delete(socket);
       const wasOnline = deps.activeSessions.delete(state.id);
+      if (wasOnline && state.handle !== null) {
+        deps.live?.publish({ kind: 'leave', fromId: state.id, handle: state.handle });
+      }
+      deps.live?.unsubscribe(state.id);
       if (state.handle !== null) {
         onLog(
           `Call ended: ${state.handle} (${state.transport}, ${formatElapsed(state.connectedAt, deps.now())}${wasOnline ? '' : ', was not in online list'})`,
         );
       }
     };
+
+    // Live delivery runs through the same per-connection chain as input
+    // handling, so a notice can never interleave with engine output, and
+    // is gated on the session still being online (pre-login sessions
+    // never receive notices). The frame redraws the prompt + partial
+    // input; the input buffer itself is never touched.
+    const deliverLive = (event: LiveEvent): void => {
+      chain = chain
+        .then(() => {
+          if (socket.destroyed) return;
+          if (!deps.activeSessions.has(state.id)) return;
+          const frame = buildLiveFrame(
+            renderLiveNotice(event),
+            currentPrompt,
+            lineReader.pendingInput(),
+            PASSCODE_PHASES.has(state.phase),
+          );
+          socket.write(toCRLF(frame));
+        })
+        .catch((err: unknown) => {
+          onLog(`Telnet live delivery error: ${err instanceof Error ? err.message : String(err)}`);
+        });
+    };
+    deps.live?.subscribe(state.id, deliverLive);
 
     socket.on('error', (err) => {
       onLog(`Telnet socket error: ${err.message}`);
@@ -93,10 +123,12 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<Running
         socket.write('\r\n  !! Line too long. Keep lines under 1024 characters.\r\n');
       }
       for (const line of lines) {
+        currentPrompt = '';
         const out = await processInput({ state, input: line, deps });
         state = out.state;
         if (out.output !== '') {
           socket.write(toCRLF(out.output));
+          currentPrompt = trailingPrompt(out.output);
         }
         if (state.phase === 'LOGOFF') {
           socket.end();
@@ -121,6 +153,7 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<Running
         state = out.state;
         if (out.output !== '') {
           socket.write(toCRLF(out.output));
+          currentPrompt = trailingPrompt(out.output);
         }
       })
       .catch((err: unknown) => {

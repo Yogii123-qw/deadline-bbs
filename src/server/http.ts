@@ -13,6 +13,7 @@ import * as net from 'node:net';
 import * as path from 'node:path';
 import { getDownloadInfo } from '../files/filearea.js';
 import { FileAreaError } from '../shared/errors.js';
+import type { ApiHandler } from '../sync/api.js';
 import type { RunningServer } from './telnet.js';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -32,6 +33,9 @@ export interface HttpServerOptions {
   filesDir: string;
   onUpgrade: (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => void;
   onLog?: (message: string) => void;
+  /** Optional handler for /sync/exchange and /api/*. Runs before the
+   *  method check: the sync endpoint needs POST. */
+  onApi?: ApiHandler;
 }
 
 function sendText(
@@ -51,12 +55,21 @@ export function startHttpServer(options: HttpServerOptions): Promise<RunningServ
   const server = http.createServer((req, res) => {
     void (async () => {
       try {
+        const url = new URL(req.url ?? '/', 'http://localhost');
+        const pathname = url.pathname;
+
+        if (
+          options.onApi !== undefined &&
+          (pathname === '/sync/exchange' || pathname.startsWith('/api/'))
+        ) {
+          const handled = await options.onApi(req, res);
+          if (handled) return;
+        }
+
         if (req.method !== 'GET' && req.method !== 'HEAD') {
           sendText(res, 405, 'Method not allowed.');
           return;
         }
-        const url = new URL(req.url ?? '/', 'http://localhost');
-        const pathname = url.pathname;
 
         if (pathname.startsWith('/files/')) {
           const rawName = pathname.slice('/files/'.length);

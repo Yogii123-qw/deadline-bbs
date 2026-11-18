@@ -182,4 +182,53 @@ export class BoardStore {
   public newestPostId(thread: Thread): string | null {
     return lastPostOf(thread)?.id ?? null;
   }
+
+  /**
+   * Federation import: store a thread received from a peer, verbatim ids.
+   * Returns false when a thread with this id already exists (idempotent:
+   * receiving the same entry twice never duplicates). The caller owns
+   * validation and sanitization (see sync/engine.ts). Throws
+   * ValidationError for an unknown board.
+   */
+  public async importThread(thread: Thread): Promise<boolean> {
+    await this.getBoard(thread.boardId);
+    let inserted = false;
+    await this.store.write((data) => {
+      if (data.threads.some((t) => t.id === thread.id)) return data;
+      inserted = true;
+      return { ...data, threads: [...data.threads, thread] };
+    });
+    return inserted;
+  }
+
+  /**
+   * Federation import: store a reply received from a peer, verbatim id,
+   * inserted in chronological order (comparePosts) so late or out-of-order
+   * arrivals still display in the right place. Returns 'duplicate' when a
+   * post with this id already exists and 'unknown-thread' when the thread
+   * has not arrived yet (the caller queues it as pending).
+   */
+  public async importReply(post: Post): Promise<'imported' | 'duplicate' | 'unknown-thread'> {
+    let status: 'imported' | 'duplicate' | 'unknown-thread' = 'unknown-thread';
+    await this.store.write((data) => {
+      if (data.threads.some((t) => t.posts.some((p) => p.id === post.id))) {
+        status = 'duplicate';
+        return data;
+      }
+      if (!data.threads.some((t) => t.id === post.threadId)) {
+        status = 'unknown-thread';
+        return data;
+      }
+      status = 'imported';
+      return {
+        ...data,
+        threads: data.threads.map((t) =>
+          t.id === post.threadId
+            ? { ...t, posts: [...t.posts, post].sort(comparePosts) }
+            : t,
+        ),
+      };
+    });
+    return status;
+  }
 }

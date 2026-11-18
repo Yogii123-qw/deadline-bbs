@@ -16,13 +16,17 @@ import type {
   ActiveSession,
   BoardContext,
   GameCharacter,
+  Post,
   SessionState,
+  Thread,
 } from '../shared/types.js';
 import type { BoardStore } from '../boards/boards.js';
 import { comparePosts } from '../boards/boards.js';
 import { searchBoards } from '../boards/search.js';
 import type { UserStore } from '../users/users.js';
 import type { ScoreStore } from '../game/scores.js';
+import type { LiveHub } from '../server/live.js';
+import type { SyncLogStore } from '../sync/store.js';
 import {
   DAILY_TURNS,
   checkWinCondition,
@@ -40,6 +44,7 @@ import {
   BODY_MAX,
   MAX_LINE,
   SUBJECT_MAX,
+  validateChatMessage,
   validateHandle,
   validatePasscode,
   validatePost,
@@ -51,6 +56,7 @@ import {
   THREADS_PER_PAGE,
   boardListScreen,
   catacombScreen,
+  chatHelpScreen,
   combatScreen,
   composeScreen,
   errorScreen,
@@ -77,6 +83,10 @@ export interface EngineDeps {
   now: () => Date;
   rng: () => number;
   onLog: (message: string) => void;
+  /** Live hub: when absent, the engine behaves exactly as before (no events). */
+  live?: LiveHub;
+  /** Sync log: when absent, local posts are not recorded for federation. */
+  syncLog?: SyncLogStore;
 }
 
 export interface EngineInput {
@@ -276,6 +286,79 @@ function whoOnlineOutput(state: SessionState, deps: EngineDeps): string {
   return whoOnlineScreen(sessions, deps.now(), renderWidth(state));
 }
 
+/**
+ * Record a locally created post in the federation log. Never throws:
+ * appendLocal logs its own failures, and a failed log append must never
+ * take down a post that already stands locally.
+ */
+async function recordSyncEntry(
+  deps: EngineDeps,
+  kind: 'thread' | 'reply',
+  payload: Thread | Post,
+): Promise<void> {
+  if (deps.syncLog === undefined) return;
+  await deps.syncLog.appendLocal(kind, payload, payload.createdAt);
+}
+
+/**
+ * One-shot live chat from the main menu: `6 <handle> <message>`. Bare `6`
+ * shows the help screen (who is online + syntax). No new session phase:
+ * the command is parsed from the raw input line (message case preserved)
+ * and the caller stays at the menu. Errors throw ValidationError, which
+ * processInput renders as error + menu re-render, like every other
+ * recoverable menu error.
+ */
+async function handleChatCommand(
+  state: SessionState,
+  deps: EngineDeps,
+  input: string,
+  width: number,
+): Promise<EngineOutput> {
+  const next = menuState(state);
+  const rest = input.trim().slice(1).trim();
+  if (rest === '') {
+    const sessions = [...deps.activeSessions.values()].sort(
+      (a, b) => a.connectedAt.getTime() - b.connectedAt.getTime(),
+    );
+    return {
+      state: next,
+      output: `${chatHelpScreen(sessions, width)}\n${await menuOutput(next, deps)}`,
+    };
+  }
+  const space = rest.indexOf(' ');
+  const targetName = space === -1 ? rest : rest.slice(0, space);
+  const rawMessage = space === -1 ? '' : rest.slice(space + 1);
+  if (rawMessage.trim() === '') {
+    throw new ValidationError('Usage: 6 <handle> <message> — include a message to send.');
+  }
+  const message = validateChatMessage(rawMessage);
+  if (state.handle !== null && targetName.toLowerCase() === state.handle.toLowerCase()) {
+    throw new ValidationError('You cannot chat with yourself. Pick another caller.');
+  }
+  const target = [...deps.activeSessions.values()].find(
+    (s) => s.handle.toLowerCase() === targetName.toLowerCase(),
+  );
+  if (target === undefined) {
+    throw new ValidationError(`${targetName} is not online right now. Use 5 to see who is online.`);
+  }
+  if (deps.live === undefined) {
+    throw new ValidationError('Live chat is not available right now.');
+  }
+  const delivered = deps.live.sendTo(target.id, {
+    kind: 'chat',
+    fromId: state.id,
+    handle: state.handle ?? 'unknown',
+    message,
+  });
+  if (!delivered) {
+    throw new ValidationError(`${target.handle} just hung up. Try again later.`);
+  }
+  return {
+    state: next,
+    output: `\n  Message sent to ${target.handle}.\n${await menuOutput(next, deps)}`,
+  };
+}
+
 /** Re-render the current phase's screen (used after recoverable errors). */
 async function renderPhase(state: SessionState, deps: EngineDeps): Promise<string> {
   const width = renderWidth(state);
@@ -422,6 +505,12 @@ async function dispatch(
           transport: state.transport,
           connectedAt: new Date(state.connectedAt),
         });
+        deps.live?.publish({
+          kind: 'join',
+          fromId: state.id,
+          handle: user.handle,
+          transport: state.transport,
+        });
         const next = menuState({ ...state, userId: user.id, handle: user.handle });
         return { state: next, output: await menuOutput(next, deps) };
       } catch (err) {
@@ -462,6 +551,12 @@ async function dispatch(
         handle: user.handle,
         transport: state.transport,
         connectedAt: new Date(state.connectedAt),
+      });
+      deps.live?.publish({
+        kind: 'join',
+        fromId: state.id,
+        handle: user.handle,
+        transport: state.transport,
       });
       const next = menuState({
         ...state,
@@ -528,6 +623,9 @@ async function dispatch(
         const next: SessionState = { ...state, phase: 'WHO_ONLINE' };
         return { state: next, output: whoOnlineOutput(next, deps) };
       }
+      if (cmd === '6' || cmd.startsWith('6 ')) {
+        return handleChatCommand(state, deps, input, width);
+      }
       if (cmd === 'G') {
         const next: SessionState = { ...state, phase: 'LOGOFF' };
         return {
@@ -538,7 +636,7 @@ async function dispatch(
       const next = menuState(state);
       return {
         state: next,
-        output: `${errorScreen('Unknown choice. Pick 1-5 or G.')}\n${await menuOutput(next, deps)}`,
+        output: `${errorScreen('Unknown choice. Pick 1-6 or G.')}\n${await menuOutput(next, deps)}`,
       };
     }
 
@@ -861,6 +959,12 @@ async function dispatch(
         const victorious: GameCharacter = { ...result.character, isVictorious: true };
         await deps.users.saveCharacter(state.userId, victorious);
         await deps.scores.recordVictory(state.handle ?? 'unknown', victorious.level, deps.now());
+        deps.live?.publish({
+          kind: 'victory',
+          fromId: state.id,
+          handle: state.handle ?? 'unknown',
+          level: victorious.level,
+        });
         const next: SessionState = {
           ...state,
           phase: 'HALL_OF_FAME',
@@ -939,7 +1043,17 @@ async function composeBody(
       if (ctx.threadId === null) throw new GameError('No thread selected.');
       const thread = await deps.boards.getThread(ctx.threadId);
       validatePost(thread.subject, body);
-      await deps.boards.replyToThread(ctx.threadId, state.handle ?? 'unknown', body, deps.now());
+      const post = await deps.boards.replyToThread(ctx.threadId, state.handle ?? 'unknown', body, deps.now());
+      await recordSyncEntry(deps, 'reply', post);
+      const board = await deps.boards.getBoard(thread.boardId);
+      deps.live?.publish({
+        kind: 'post',
+        fromId: state.id,
+        handle: state.handle ?? 'unknown',
+        boardName: board.name,
+        subject: thread.subject,
+        isReply: true,
+      });
       const updated = await deps.boards.getThread(ctx.threadId);
       const lastPage = Math.max(
         0,
@@ -958,13 +1072,23 @@ async function composeBody(
     if (ctx.boardId === null || ctx.composingSubject === null) {
       throw new GameError('Nothing to post.');
     }
-    await deps.boards.createThread(
+    const thread = await deps.boards.createThread(
       ctx.boardId,
       state.handle ?? 'unknown',
       ctx.composingSubject,
       body,
       deps.now(),
     );
+    await recordSyncEntry(deps, 'thread', thread);
+    const board = await deps.boards.getBoard(ctx.boardId);
+    deps.live?.publish({
+      kind: 'post',
+      fromId: state.id,
+      handle: state.handle ?? 'unknown',
+      boardName: board.name,
+      subject: thread.subject,
+      isReply: false,
+    });
     const next: SessionState = {
       ...state,
       phase: 'THREAD_LIST',

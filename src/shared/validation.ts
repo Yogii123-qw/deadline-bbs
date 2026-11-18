@@ -19,6 +19,7 @@ export const SUBJECT_MAX = 72;
 export const BODY_MAX = 4096;
 export const MAX_LINE = 1024;
 export const SEARCH_MAX = 100;
+export const CHAT_MAX = 500;
 
 /* ------------------------------------------------------------------ */
 /* Persisted store schemas                                             */
@@ -200,4 +201,21 @@ export function validateSearchQuery(raw: string): string {
     throw new ValidationError(`Search query must be at most ${SEARCH_MAX} characters.`);
   }
   return query;
+}
+
+/**
+ * Clean and validate a live chat message. Oversized input is rejected,
+ * never silently truncated (same rule as posts).
+ */
+export function validateChatMessage(raw: string): string {
+  const message = sanitizeUserText(raw).trim();
+  if (message.length === 0) {
+    throw new ValidationError('Chat message must not be empty.');
+  }
+  if (message.length > CHAT_MAX) {
+    throw new ValidationError(
+      `Chat message must be at most ${CHAT_MAX} characters (yours is ${message.length}).`,
+    );
+  }
+  return message;
 }
