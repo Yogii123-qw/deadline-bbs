@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Verify on Stop",
+      "trigger": "Stop",
+      "action": {
+        "type": "command",
+        "command": "npm run verify",
+        "timeout": 300
+      }
+    }
+  ]
+}

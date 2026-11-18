@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck on Save",
+      "trigger": "PostFileSave",
+      "matcher": "(src|web)/.*\\\\.tsx?$",
+      "action": {
+        "type": "command",
+        "command": "npm run check",
+        "timeout": 120
+      }
+    }
+  ]
+}
