@@ -56,7 +56,7 @@ export function reverseVideo(): string {
 }
 
 const ANSI_PATTERN =
-  /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[@-Z\\-_]/g;
+  /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[@-Z\\-_]|\x1b/g;
 
 /**
  * Remove every ANSI escape sequence from a string. Used on all user-supplied
