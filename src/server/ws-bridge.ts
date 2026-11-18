@@ -11,6 +11,7 @@ import { LineReader } from '../session/input.js';
 import {
   newSession,
   processInput,
+  redrawGreeting,
   type EngineDeps,
 } from '../session/engine.js';
 import { formatElapsed } from '../session/screens.js';
@@ -31,6 +32,8 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
   let state = newSession('websocket', deps.now());
   let chain: Promise<void> = Promise.resolve();
   let cleanedUp = false;
+  let sawInput = false;
+  let redrew = false;
 
   const cleanup = (): void => {
     if (cleanedUp) return;
@@ -60,6 +63,15 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
             terminalWidth: resize.data.cols,
             terminalHeight: resize.data.rows,
           };
+          if (!sawInput && !redrew && resize.data.cols < 80) {
+            // Narrow terminal, nothing typed yet: repaint the greeting at
+            // the real width instead of leaving the 80-column splash wrapped.
+            redrew = true;
+            const greeting = redrawGreeting(state);
+            if (greeting !== '') {
+              ws.send(toCRLF(greeting));
+            }
+          }
           return;
         }
       } catch {
@@ -67,6 +79,7 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
       }
     }
     const mode = PASSCODE_PHASES.has(state.phase) ? 'mask' : 'echo';
+    sawInput = true;
     const { lines, echo, overflow } = lineReader.feed(text, mode);
     if (echo !== '') {
       ws.send(echo);

@@ -17,7 +17,7 @@ import type {
 import type { CombatRoundResult } from '../game/catacomb.js';
 import type { FileEntry } from '../shared/types.js';
 import type { SearchResult } from '../boards/search.js';
-import { bold, clearScreen, color, reset } from '../telnet/ansi.js';
+import { bold, clearScreen, color, reset, stripAnsi } from '../telnet/ansi.js';
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -68,7 +68,9 @@ function rule(width: number): string {
 }
 
 function centerLine(text: string, width: number): string {
-  const pad = Math.max(0, Math.floor((width - text.length) / 2));
+  // Measure visible characters only: escape codes must not shift the pad.
+  const visible = stripAnsi(text).length;
+  const pad = Math.max(0, Math.floor((width - visible) / 2));
   return ' '.repeat(pad) + text;
 }
 
@@ -96,15 +98,45 @@ function banner(word: string): string[] {
   return rows;
 }
 
+/**
+ * Tombstone art. Every row is exactly 24 columns and the block is centered
+ * with ONE pad, so the shape can never skew (centering each row by its own
+ * length leans the stone).
+ */
+const TOMBSTONE_ROWS = [
+  '      ____________      ',
+  '     /            \\     ',
+  '    |   R.I.P.     |    ',
+  '    |  1978-1995   |    ',
+  '    |______________|    ',
+];
+
+function centerBlock(rows: string[], width: number): string[] {
+  const blockWidth = Math.max(...rows.map((r) => r.length));
+  const pad = Math.max(0, Math.floor((width - blockWidth) / 2));
+  return rows.map((r) => ' '.repeat(pad) + r);
+}
+
 export function splashScreen(width: number = DEFAULT_WIDTH): string {
-  const art = banner('DEADLINE').map((row) => centerLine(row, width));
-  const tombstone = [
-    '      _________      ',
-    '     /         \\     ',
-    '    /  R.I.P.   \\    ',
-    '   |   1978-1995  |   ',
-    '   |______________|   ',
-  ].map((row) => centerLine(row, width));
+  if (width < 50) {
+    // Narrow terminals (phones): the 47-column logo cannot fit, so render
+    // a compact splash that stays readable instead of wrapping mid-letter.
+    const lines = [
+      clearScreen(),
+      ...centerBlock(TOMBSTONE_ROWS, width),
+      '',
+      centerLine(`${bold()}${color(35)}DEADLINE BBS${reset()}`, width),
+      centerLine(`${color(33)}THE BOARD THAT REFUSES TO DIE${reset()}`, width),
+      '',
+      centerLine('Est. 1994 · Still answering.', width),
+      centerLine('Kiroween 2026 — Resurrection', width),
+      '',
+      rule(width),
+    ];
+    return lines.join('\n');
+  }
+  const art = centerBlock(banner('DEADLINE'), width);
+  const tombstone = centerBlock(TOMBSTONE_ROWS, width);
   const lines = [
     clearScreen(),
     ...tombstone,
@@ -112,7 +144,7 @@ export function splashScreen(width: number = DEFAULT_WIDTH): string {
     ...art.map((row) => `${bold()}${color(35)}${row}${reset()}`),
     centerLine(`${color(33)}THE BULLETIN BOARD SYSTEM THAT REFUSES TO DIE${reset()}`, width),
     '',
-    centerLine('Est. 1994 · One node · 14.4k · Still answering.', width),
+    centerLine('Est. 1994 · One node · Still answering.', width),
     centerLine('Kiroween 2026 — Resurrection', width),
     '',
     rule(width),
@@ -125,12 +157,17 @@ export function splashScreen(width: number = DEFAULT_WIDTH): string {
 /* ------------------------------------------------------------------ */
 
 export function mainMenu(handle: string, elapsed: string, width: number = DEFAULT_WIDTH): string {
+  // Narrow terminals: the greeting + timer on one line would wrap mid-number.
+  const greeting =
+    width < 50
+      ? [`  Welcome back, ${bold()}${handle}${reset()}.`, `  Call time: ${elapsed}`]
+      : [`  Welcome back, ${bold()}${handle}${reset()}.  Call time: ${elapsed}`];
   return [
     '',
     bar('DEADLINE BBS — MAIN MENU', width),
     `${color(36)}└${'─'.repeat(Math.max(0, width - 2))}┘${reset()}`,
     '',
-    `  Welcome back, ${bold()}${handle}${reset()}.  Call time: ${elapsed}`,
+    ...greeting,
     '',
     `  ${color(33)}1${reset()}  Message Boards`,
     `  ${color(33)}2${reset()}  File Area`,

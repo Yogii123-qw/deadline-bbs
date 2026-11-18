@@ -4,7 +4,7 @@
 
 :root {
   --phosphor: #ffb000;
-  --phosphor-dim: #8a6d2f;
+  --phosphor-dim: #9c7c33;
   --phosphor-faint: #5c4a22;
   --crt-bg: #0d0a04;
   --bezel: #050403;
@@ -127,12 +127,15 @@ body {
   min-height: 0;
   overflow: hidden;
   background: var(--crt-bg);
+  /* Padding lives on the wrapper, not the terminal: FitAddon measures the
+     terminal element's box, and padding there clips the last row. */
+  padding: 12px;
 }
 
 #terminal {
-  position: absolute;
-  inset: 0;
-  padding: 12px;
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 #terminal .xterm-viewport {
@@ -201,7 +204,7 @@ body {
     font-size: 14px;
   }
 
-  #terminal {
+  #terminal-wrap {
     padding: 8px;
   }
 

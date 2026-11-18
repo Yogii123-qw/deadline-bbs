@@ -76,6 +76,31 @@ describe('websocket transport', () => {
     await client.waitForPlain('MAIN MENU');
   });
 
+  it('repaints a compact greeting on a narrow resize before any input', async () => {
+    const port = await boot();
+    const client = await WsClient.connect(port);
+    clients.push(client);
+    await client.waitFor('Handle:');
+    client.send(JSON.stringify({ type: 'resize', cols: 44, rows: 30 }));
+    await client.waitForPlain('THE BOARD THAT REFUSES TO DIE');
+    // The session still works after the repaint.
+    client.send('Alice\n');
+    await client.waitFor('passcode');
+  });
+
+  it('does not repaint once the user has typed', async () => {
+    const port = await boot();
+    const client = await WsClient.connect(port);
+    clients.push(client);
+    await client.waitFor('Handle:');
+    client.send('A');
+    await new Promise((r) => setTimeout(r, 100));
+    client.send(JSON.stringify({ type: 'resize', cols: 44, rows: 30 }));
+    await new Promise((r) => setTimeout(r, 200));
+    const count = client.plain.split('THE BOARD THAT REFUSES TO DIE').length - 1;
+    expect(count).toBe(0);
+  });
+
   it('cleans up the session on close', async () => {
     const port = await boot();
     const client = await WsClient.connect(port);

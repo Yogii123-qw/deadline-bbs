@@ -133,6 +133,18 @@ function renderWidth(state: SessionState): number {
   return Math.min(200, Math.max(40, state.terminalWidth));
 }
 
+/**
+ * Re-render the greeting (splash + handle prompt) at the session's current
+ * width. Transports call this once, when they learn the real terminal size
+ * before the user has typed anything: a narrow terminal would otherwise
+ * show the 80-column splash wrapped mid-letter. Returns '' unless the
+ * session is still at the handle prompt.
+ */
+export function redrawGreeting(state: SessionState): string {
+  if (state.phase !== 'HANDLE_PROMPT') return '';
+  return `${splashScreen(renderWidth(state))}\n\nHandle: `;
+}
+
 function menuState(state: SessionState): SessionState {
   return {
     ...state,

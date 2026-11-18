@@ -46,7 +46,7 @@ const term = new Terminal({
     magenta: '#d478c2',
     cyan: '#4ec2b8',
     white: '#e8dcc0',
-    brightBlack: '#6b5a33',
+    brightBlack: '#8a7a4d',
     brightRed: '#ff7a6e',
     brightGreen: '#a8d67e',
     brightYellow: '#ffd34d',

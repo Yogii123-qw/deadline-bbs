@@ -31,6 +31,34 @@ describe('screens', () => {
     expect(plain).toContain('Est. 1994');
   });
 
+  it('tombstone rows share one width (no skew)', () => {
+    const plain = stripAnsi(splashScreen(80));
+    const lines = plain.split('\n');
+    const stoneTop = lines.findIndex((l) => l.includes('____________'));
+    expect(stoneTop).toBeGreaterThanOrEqual(0);
+    const stone = lines.slice(stoneTop, stoneTop + 5);
+    expect(new Set(stone.map((r) => r.length)).size).toBe(1);
+    expect(plain).toContain('R.I.P.');
+    expect(plain).toContain('1978-1995');
+  });
+
+  it('narrow splash is compact: no 47-column logo, everything fits', () => {
+    const plain = stripAnsi(splashScreen(44));
+    expect(plain).not.toContain('█');
+    expect(plain).toContain('DEADLINE BBS');
+    expect(plain).toContain('THE BOARD THAT REFUSES TO DIE');
+    for (const line of plain.split('\n')) {
+      expect(line.length).toBeLessThanOrEqual(44);
+    }
+  });
+
+  it('full splash lines fit 80 columns', () => {
+    const plain = stripAnsi(splashScreen(80));
+    for (const line of plain.split('\n')) {
+      expect(line.length).toBeLessThanOrEqual(80);
+    }
+  });
+
   it('main menu shows handle and elapsed time', () => {
     const plain = stripAnsi(mainMenu('Alice', '0:04:12'));
     expect(plain).toContain('Alice');
@@ -38,6 +66,14 @@ describe('screens', () => {
     expect(plain).toContain('Message Boards');
     expect(plain).toContain('CATACOMB');
     expect(plain).toContain('Goodbye');
+  });
+
+  it('narrow main menu never wraps the timer mid-number', () => {
+    const plain = stripAnsi(mainMenu('A'.repeat(20), '0:00:04', 44));
+    for (const line of plain.split('\n')) {
+      expect(stripAnsi(line).length).toBeLessThanOrEqual(44);
+    }
+    expect(plain).toContain('0:00:04');
   });
 
   it('thread list paginates and marks unread', () => {

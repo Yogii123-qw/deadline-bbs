@@ -147,6 +147,15 @@ describe('telnet transport', () => {
     expect(env.deps.activeSessions.size).toBe(1);
   });
 
+  it('repaints a compact greeting on narrow NAWS before any input', async () => {
+    const port = await boot();
+    const client = await connect(port);
+    await client.waitFor('Handle:');
+    client.sendBytes([255, 250, 31, 0, 44, 0, 30, 255, 240]);
+    await client.waitForPlain('THE BOARD THAT REFUSES TO DIE');
+    await register(client, 'Alice', 'pass1234');
+  });
+
   it('closes the connection on logoff', async () => {
     const port = await boot();
     const client = await connect(port);

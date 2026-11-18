@@ -12,6 +12,7 @@ import { LineReader } from '../session/input.js';
 import {
   newSession,
   processInput,
+  redrawGreeting,
   type EngineDeps,
 } from '../session/engine.js';
 import { formatElapsed } from '../session/screens.js';
@@ -45,6 +46,8 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<Running
     const lineReader = new LineReader();
     let state = newSession('telnet', deps.now());
     let chain: Promise<void> = Promise.resolve();
+    let sawInput = false;
+    let redrew = false;
 
     const cleanup = (): void => {
       sockets.delete(socket);
@@ -69,8 +72,18 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<Running
       }
       if (naws !== null) {
         state = { ...state, terminalWidth: naws.width, terminalHeight: naws.height };
+        if (!sawInput && !redrew && naws.width < 80) {
+          // Narrow terminal, nothing typed yet: repaint the greeting at the
+          // real width instead of leaving the 80-column splash wrapped.
+          redrew = true;
+          const greeting = redrawGreeting(state);
+          if (greeting !== '') {
+            socket.write(toCRLF(greeting));
+          }
+        }
       }
       if (data.length === 0) return;
+      sawInput = true;
       const mode = PASSCODE_PHASES.has(state.phase) ? 'mask' : 'echo';
       const { lines, echo, overflow } = lineReader.feed(data.toString('utf8'), mode);
       if (echo !== '') {
