@@ -13,4 +13,9 @@ export default defineConfig({
       '/files': 'http://localhost:8080',
     },
   },
+  // Vitest must run from the repo root, not the web/ root above.
+  test: {
+    root: '.',
+    include: ['tests/**/*.test.ts'],
+  },
 });
