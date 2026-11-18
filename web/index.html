@@ -8,21 +8,24 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#terminal-wrap">Skip to terminal</a>
   <div class="crt">
     <header class="topbar">
       <div class="brand">DEADLINE <span>BBS</span></div>
       <div class="status">
         <span id="status-dot" class="dot" aria-hidden="true"></span>
-        <span id="status-text">CONNECTING</span>
+        <span id="status-text" aria-live="polite">CONNECTING</span>
         <button id="reconnect" type="button" hidden>Reconnect</button>
       </div>
     </header>
-    <main id="terminal-wrap">
+    <main id="terminal-wrap" aria-label="BBS terminal" tabindex="-1">
+      <p class="visually-hidden">Interactive bulletin board terminal. Use your keyboard to type commands and press Enter; the board answers in text. If the connection drops, use the Reconnect button.</p>
       <div id="terminal"></div>
       <div class="scanlines" aria-hidden="true"></div>
     </main>
     <footer class="hintbar">
       <span>Type to talk to the board. A new handle registers on the spot.</span>
+      <span><a href="/archive">Public archive</a> — read the boards without calling in.</span>
       <span class="telnet-hint">Also on telnet: <code id="telnet-cmd">telnet localhost 2323</code></span>
     </footer>
   </div>

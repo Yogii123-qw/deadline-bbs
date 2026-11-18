@@ -12,14 +12,15 @@
  * secret). Secrets are compared constant-time on SHA-256 hashes, so
  * differing lengths leak nothing.
  *
- * The public SSE stream carries live post/victory/join/leave events only.
- * Chat messages NEVER enter it: a direct message stays between two
+ * The public SSE stream carries live post/edit/victory/join/leave events
+ * only. Chat messages NEVER enter it: a direct message stays between two
  * callers on one node.
  */
 
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import type * as http from 'node:http';
 import type { BoardStore } from '../boards/boards.js';
+import type { Post, Thread } from '../shared/types.js';
 import { ValidationError } from '../shared/errors.js';
 import { type LiveEvent, type LiveHub } from '../server/live.js';
 import { MAX_SYNC_BODY_BYTES, zSyncExchangeRequest } from './entries.js';
@@ -55,6 +56,25 @@ export function secretsMatch(provided: string | undefined, expected: string): bo
   const a = createHash('sha256').update(provided).digest();
   const b = createHash('sha256').update(expected).digest();
   return timingSafeEqual(a, b);
+}
+
+/**
+ * Attach `editedAt` to edited posts (a JSON superset of the Post shape —
+ * the field is additive, so old clients keep working). Tombstoned posts
+ * never reach here: listThreads/getThread already filter them.
+ */
+async function withEditedMarkers(
+  boards: BoardStore,
+  threads: Thread[],
+): Promise<Array<Thread & { posts: Array<Post & { editedAt?: string }> }>> {
+  const data = await boards.readData();
+  return threads.map((thread) => ({
+    ...thread,
+    posts: thread.posts.map((post) => {
+      const meta = data.postMeta[post.id];
+      return meta === undefined ? post : { ...post, editedAt: meta.editedAt };
+    }),
+  }));
 }
 
 class BodyTooLargeError extends Error {}
@@ -180,7 +200,7 @@ export function createApiHandler(deps: ApiHandlerDeps): ApiHandler {
       try {
         const board = await deps.boards.getBoard(boardId);
         const threads = await deps.boards.listThreads(boardId);
-        sendJson(res, 200, { board, threads });
+        sendJson(res, 200, { board, threads: await withEditedMarkers(deps.boards, threads) });
       } catch (err) {
         if (err instanceof ValidationError) {
           sendJson(res, 404, { error: 'Board not found.' });
@@ -195,7 +215,8 @@ export function createApiHandler(deps: ApiHandlerDeps): ApiHandler {
       const threadId = decodeURIComponent(threadMatch[1]);
       try {
         const thread = await deps.boards.getThread(threadId);
-        sendJson(res, 200, { thread });
+        const [marked] = await withEditedMarkers(deps.boards, [thread]);
+        sendJson(res, 200, { thread: marked });
       } catch (err) {
         if (err instanceof ValidationError) {
           sendJson(res, 404, { error: 'Thread not found.' });

@@ -18,6 +18,8 @@ import type { CombatRoundResult } from '../game/catacomb.js';
 import type { FileEntry } from '../shared/types.js';
 import type { SearchResult } from '../boards/search.js';
 import type { LiveEvent } from '../server/live.js';
+import type { NodeStatusData } from '../sync/engine.js';
+import type { NetworkScore } from '../shared/validation.js';
 import { bold, clearScreen, color, reset, sanitizeUserText, stripAnsi } from '../telnet/ansi.js';
 
 /* ------------------------------------------------------------------ */
@@ -176,6 +178,7 @@ export function mainMenu(handle: string, elapsed: string, width: number = DEFAUL
     `  ${color(33)}4${reset()}  Hall of Fame`,
     `  ${color(33)}5${reset()}  Who's Online`,
     `  ${color(33)}6${reset()}  Chat with a caller online`,
+    `  ${color(33)}7${reset()}  Node Status — federation, live`,
     `  ${color(33)}G${reset()}  Goodbye (log off)`,
     '',
     'Choice: ',
@@ -240,6 +243,7 @@ export function threadViewScreen(
   thread: Thread,
   page: number,
   width: number = DEFAULT_WIDTH,
+  editedAtByPost: Record<string, string> = {},
 ): string {
   const totalPages = Math.max(1, Math.ceil(thread.posts.length / POSTS_PER_PAGE));
   const safePage = Math.min(page, totalPages - 1);
@@ -248,13 +252,23 @@ export function threadViewScreen(
     safePage * POSTS_PER_PAGE + POSTS_PER_PAGE,
   );
   const lines = ['', bar(`THREAD: ${thread.subject}`, width), ''];
-  for (const post of slice) {
-    const archive = post.isArchive ? ` ${color(35)}[ARCHIVE - 1994]${reset()}` : '';
-    lines.push(`${bold()}From:${reset()} ${post.authorHandle}${archive}  ${color(36)}${post.createdAt.slice(0, 10)}${reset()}`);
-    lines.push(...wrapText(post.body, width - 2).map((l) => `  ${l}`));
+  if (thread.posts.length === 0) {
+    lines.push('  This thread has no posts to show.');
     lines.push('');
   }
-  lines.push(`  Page ${safePage + 1}/${totalPages} · Enter: more · R: reply · Q: back to threads`);
+  slice.forEach((post, i) => {
+    const n = safePage * POSTS_PER_PAGE + i + 1;
+    const archive = post.isArchive ? ` ${color(35)}[ARCHIVE - 1994]${reset()}` : '';
+    const editedAt = editedAtByPost[post.id];
+    const edited =
+      editedAt !== undefined
+        ? ` ${color(33)}[edited ${editedAt.slice(0, 10)}]${reset()}`
+        : '';
+    lines.push(`#${n}  ${bold()}From:${reset()} ${post.authorHandle}${archive}  ${color(36)}${post.createdAt.slice(0, 10)}${reset()}${edited}`);
+    lines.push(...wrapText(post.body, width - 2).map((l) => `  ${l}`));
+    lines.push('');
+  });
+  lines.push(`  Page ${safePage + 1}/${totalPages} · Enter: more · R: reply · E<n>: edit your post · D<n>: delete your post · Q: back`);
   lines.push('');
   lines.push('Command: ');
   return lines.join('\n');
@@ -263,13 +277,16 @@ export function threadViewScreen(
 export function composeScreen(
   prompt: string,
   width: number = DEFAULT_WIDTH,
+  editing = false,
 ): string {
   return [
     '',
-    bar('COMPOSE', width),
+    bar(editing ? 'EDIT POST' : 'COMPOSE', width),
     '',
     '  Type your message. End with a single dot (.) on its own line.',
-    '  Type ABORT on its own line to cancel without posting.',
+    editing
+      ? '  Type ABORT on its own line to cancel without saving.'
+      : '  Type ABORT on its own line to cancel without posting.',
     '',
     `${prompt} `,
   ].join('\n');
@@ -402,21 +419,78 @@ export function combatScreen(
 export function hallOfFameScreen(
   entries: HallOfFameEntry[],
   width: number = DEFAULT_WIDTH,
+  network: NetworkScore[] = [],
 ): string {
   const lines = ['', bar('HALL OF FAME — CRYPT LORD SLAYERS', width), ''];
-  if (entries.length === 0) {
+  if (entries.length === 0 && network.length === 0) {
     lines.push('  The Hall of Fame is empty. No one has slain the Crypt Lord yet.');
     lines.push('  The dungeon waits.');
   }
-  entries.forEach((entry, i) => {
-    lines.push(
-      `  ${color(33)}${i + 1}.${reset()}  ${bold()}${entry.handle}${reset()} — level ${entry.level} · ${entry.timestamp.slice(0, 10)}`,
-    );
-  });
+  if (entries.length > 0) {
+    if (network.length > 0) {
+      lines.push(`  ${color(36)}THIS NODE${reset()}`);
+    }
+    entries.forEach((entry, i) => {
+      lines.push(
+        `  ${color(33)}${i + 1}.${reset()}  ${bold()}${entry.handle}${reset()} — level ${entry.level} · ${entry.timestamp.slice(0, 10)}`,
+      );
+    });
+  }
+  if (network.length > 0) {
+    lines.push('');
+    lines.push(`  ${color(36)}THE NETWORK — victories from other nodes${reset()}`);
+    network.forEach((entry, i) => {
+      lines.push(
+        `  ${color(33)}${i + 1}.${reset()}  ${bold()}${entry.handle}${reset()} — level ${entry.level} · ${entry.timestamp.slice(0, 10)} · node ${entry.originNode}`,
+      );
+    });
+  }
   lines.push('');
   lines.push('  Press Enter to return to the main menu.');
   lines.push('');
   lines.push('Continue: ');
+  return lines.join('\n');
+}
+
+/**
+ * Node status: live federation state from the sync engine. Ends with a
+ * blank line; the engine appends the main menu after it (chat-help
+ * pattern). Peer URLs are never shown — peers are numbered only.
+ */
+export function nodeStatusScreen(
+  stats: NodeStatusData,
+  width: number = DEFAULT_WIDTH,
+): string {
+  const when = (iso: string | null): string =>
+    iso === null ? 'never' : iso.slice(0, 19).replace('T', ' ');
+  const lines = ['', bar('NODE STATUS — FEDERATION', width), ''];
+  lines.push(`  Node: ${stats.nodeId}`);
+  lines.push(`  Peers: ${stats.peerCount}`);
+  lines.push(`  Sync log: ${stats.entryCount} ${stats.entryCount === 1 ? 'entry' : 'entries'} · ${stats.pendingCount} pending`);
+  lines.push(`  Last sync round: ${when(stats.lastRoundAt)}`);
+  lines.push(
+    stats.secretSet
+      ? '  Sync secret: SET'
+      : `  Sync secret: ${color(31)}OPEN — any peer may exchange${reset()}`,
+  );
+  lines.push('');
+  if (stats.peers.length === 0) {
+    lines.push('  No peers configured. This node stands alone.');
+  } else {
+    lines.push(`  ${color(36)}PEERS${reset()}`);
+    stats.peers.forEach((peer, i) => {
+      if (peer.lastRoundAt === null) {
+        lines.push(`  Peer ${i + 1}: never contacted`);
+      } else if (peer.lastError !== null) {
+        lines.push(`  Peer ${i + 1}: last round ${when(peer.lastRoundAt)} · FAILED: ${peer.lastError}`);
+      } else {
+        lines.push(
+          `  Peer ${i + 1}: last round ${when(peer.lastRoundAt)} · applied ${peer.applied} · duplicates ${peer.duplicates} · skipped ${peer.skipped}`,
+        );
+      }
+    });
+  }
+  lines.push('');
   return lines.join('\n');
 }
 
@@ -449,6 +523,12 @@ export function renderLiveNotice(event: LiveEvent): string {
       const via =
         event.originNode !== undefined ? ` (via node ${oneLine(event.originNode)})` : '';
       const what = event.isReply ? 'replied to' : 'posted';
+      return `${tag} ${who} ${what} "${oneLine(event.subject)}" in ${oneLine(event.boardName)}${via}`;
+    }
+    case 'edit': {
+      const via =
+        event.originNode !== undefined ? ` (via node ${oneLine(event.originNode)})` : '';
+      const what = event.action === 'edited' ? 'edited' : 'deleted';
       return `${tag} ${who} ${what} "${oneLine(event.subject)}" in ${oneLine(event.boardName)}${via}`;
     }
     case 'victory':

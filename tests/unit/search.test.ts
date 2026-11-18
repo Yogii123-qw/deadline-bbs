@@ -36,7 +36,7 @@ describe('searchBoards', () => {
   });
 
   it('caps results at 50', () => {
-    const data: BoardsData = { boards: seedBoardsData().boards, threads: [] };
+    const data: BoardsData = { boards: seedBoardsData().boards, threads: [], postMeta: {}, tombstones: {} };
     for (let i = 0; i < 60; i += 1) {
       data.threads.push({
         id: `t${i}`,

@@ -31,6 +31,7 @@ import { zSyncLogData, type SyncLogData } from '../sync/entries.js';
 import { EMPTY_SYNC_LOG, SyncLogStore } from '../sync/store.js';
 import { SyncEngine } from '../sync/engine.js';
 import { createApiHandler } from '../sync/api.js';
+import { createArchiveHandler } from './archive.js';
 
 function parsePort(value: string | undefined, fallback: number, name: string): number {
   if (value === undefined || value === '') return fallback;
@@ -105,7 +106,7 @@ async function main(): Promise<void> {
     ),
   );
   const scores = new ScoreStore(
-    new AtomicStore<ScoresData>(path.join(dataDir, 'scores.json'), zScoresStore, { entries: [] }, onWarning),
+    new AtomicStore<ScoresData>(path.join(dataDir, 'scores.json'), zScoresStore, { entries: [], network: [] }, onWarning),
   );
 
   const live = new LiveHub(onLog);
@@ -122,6 +123,7 @@ async function main(): Promise<void> {
     secret: syncSecret,
     intervalMs: syncIntervalMs,
     hub: live,
+    scores,
     onLog,
   });
   // Push on post: a local post triggers a sync round right away instead of
@@ -143,6 +145,7 @@ async function main(): Promise<void> {
     onLog,
     live,
     syncLog,
+    syncStats: () => syncEngine.getStats(),
   };
 
   const apiHandler = createApiHandler({
@@ -168,6 +171,7 @@ async function main(): Promise<void> {
     },
     onLog,
     onApi: apiHandler,
+    onArchive: createArchiveHandler({ boards, nodeId }),
   });
   const telnetServer = await startTelnetServer({ port: telnetPort, deps, onLog });
   syncEngine.start();

@@ -49,6 +49,15 @@ without FidoNet's machinery — one environment variable peers two nodes.
 A read-only JSON API and a public live event stream let outside tools
 read the board without a terminal.
 
+The federation log carries more than posts. Authors can edit and delete
+their own messages, and the changes sync to every peer with
+delete-wins, idempotent semantics; a Crypt Lord victory travels the
+same log, so the Hall of Fame shows slayers from the whole network,
+attributed per node. A Node Status screen shows the live federation
+state of the node you called, and a public archive page renders the
+boards for anyone, no login required. Passcodes are stored as
+PBKDF2-HMAC-SHA256 hashes with per-account salts.
+
 The boards ship with eight 1994 archive threads, each labeled `[ARCHIVE]`
 in the UI: starter lore, honestly marked. Everything a caller posts is
 real data, persisted atomically. No accounts elsewhere, no API keys, no
@@ -59,8 +68,8 @@ DeadLine does not claim to be the first federated BBS — Synchronet,
 Mystic, and ENiGMA½ carry decades of maturity and real FidoNet-era
 networking, and the README says so, with sources and an honest account
 of where DeadLine loses (no voice/images, no native mobile app, no
-edit/delete or synchronized moderation, no FTN/ActivityPub
-interoperability). What no single alternative combines is this package:
+synchronized moderation, no FTN/ActivityPub interoperability). What no
+single alternative combines is this package:
 a faithful revival, real-time live interaction, zero-config HTTP
 federation, one-command start, access from a telnet client to a phone
 browser, and self-hosting with no third-party account or service.
@@ -77,7 +86,10 @@ design, and 24 tasks in 9 waves), and the automation hooks. Kiro also
 wrote the CATACOMB game module, its 65 tests, and the shared types file.
 The remaining code, tests, web client, content, and documentation were
 written directly by the builder — including the live and federation
-layers, which were built with zero Kiro calls. The complete
+layers and the PRO-DEV round of 19 November 2026 (PBKDF2, edit/delete
+sync, federated Hall of Fame, public archive, Node Status,
+accessibility pass), all built with zero Kiro calls and no touch to any
+Kiro artifact. The complete
 call-by-call log, including one failed call and one unprompted file
 Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
 `.kiro/` was hand-written and claimed as Kiro's.
@@ -91,38 +103,56 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
    (ports 8081/8082, telnet 2324/2325) — post on one, read it on the
    other.
 
-**Demo video:** (to be recorded — see gates below; must be under 3
-minutes, public on YouTube.)
+**Demo video:** (to be recorded — shot list and narration outline in
+`docs/DEMO-SCRIPT.md`; must be under 3 minutes, public on YouTube.)
 
 ## Evidence checklist (all verified mechanically by the builder)
 
-- [x] 285/285 tests pass (`npm run verify`: typecheck + tests + build) —
-      212 original tests untouched in behavior, 73 new
-- [x] Production build passes (server + web client bundle)
+- [x] 351/351 tests pass (`npm run verify`: typecheck + tests + build) —
+      285 from before the PRO-DEV round (one hash-format assertion
+      updated for PBKDF2, disclosed in `KIRO-USAGE.md`) + 66 new:
+      PBKDF2 migration, CRDT convergence, node status, edit/delete
+      engine + real-socket integration, federated Hall of Fame,
+      archive HTTP, width-aware live frames
+- [x] Production build passes (server + web client bundle: JS 335.17 kB
+      / 84.67 kB gzip, CSS 7.26 kB)
 - [x] Headless browser walkthroughs: registration, boards, threads,
       CATACOMB, narrow-phone layout — 7 screenshots inspected; live
       layer: two-browser notice mid-typing, chat, mobile notice — 4
-      screenshots inspected
+      screenshots inspected; PRO-DEV round: menu, node status, numbered
+      + edited thread view, federated Hall of Fame, archive, mobile,
+      narrow-width mid-typing notice — 11 screenshots inspected
 - [x] Live raw-TCP telnet session: register, read, post, who's online,
       logoff; first 12 wire bytes verified as the IAC negotiation bundle
 - [x] Live layer over real sockets: two telnet clients, two WebSocket
       clients, cross-transport chat both ways, pre-login silence, reply
-      and victory broadcasts, two mid-typing integrity tests
+      and victory broadcasts, two mid-typing integrity tests; PRO-DEV:
+      width-aware frame clears every wrapped input line (7 frame tests)
 - [x] Federation over real nodes: post A→B and B→A, offline→restart
       store-and-forward without duplicates, repeated sync without
       duplicates, 3-node ring convergence with stable counts, read API
       returning exactly what the terminal shows, SSE stream carrying
-      live events but never chat messages
+      live events but never chat messages; PRO-DEV: edit/delete +
+      score entries converge over real two-node sockets, delete-wins,
+      pending-queue resolution, author-only enforcement
 - [x] Two-process federation demo run from the repo (both directions,
       sync log inspected) — transcript kept in the audit directory
 - [x] WCAG AA contrast: 24/24 color pairs pass 4.5:1 (3:1 for UI dots),
-      re-run after the new layers (no new colors added)
+      re-run after the new layers and again after the PRO-DEV round
+      (zero new colors: 21-value palette identical to HEAD)
+- [x] Public archive: HTTP tests prove its content matches the JSON API
+      thread-for-thread, POST/PUT → 405, HEAD works, no forms or
+      scripts, user content escaped
 - [x] Mock/TODO/secret greps clean over the new live + sync code
-      (repo-wide grep shows only two pre-existing "no mocks" header
-      comments in test helpers)
-- [x] Kiro artifacts untouched by the new layers: `git diff` over
-      `.kiro/`, the CATACOMB module, its tests, and shared types shows
-      zero changed lines; zero `kiro-cli` calls for the new layers
+      (repo-wide grep shows only "No mocks" policy declarations in
+      test-file header comments, plus the two pre-existing ones in
+      test helpers); re-run over the PRO-DEV code with the same
+      result — no TODO/FIXME, no secrets, no mock or simulation
+      code anywhere
+- [x] Kiro artifacts untouched by the new layers and the PRO-DEV round:
+      `git diff` over `.kiro/`, the CATACOMB module, its tests, and
+      shared types shows zero changed lines; zero `kiro-cli` calls for
+      the new layers and the PRO-DEV round
 - [x] `/.kiro` at the repo root, tracked by git, NOT gitignored
 - [x] Apache-2.0 license; no remote; no `.env`; no secrets
 - [ ] Demo video (< 3 min, public YouTube) — **needs Monch**
@@ -139,14 +169,17 @@ minutes, public on YouTube.)
   scripts, but hook execution was never observed during the build.
 - The live Kiro credit balance — not visible via CLI on the free plan.
   Five prompts were used; one reserve prompt was never spent.
-- Federation v1 limits (by design, disclosed in the README): no
-  edit/delete sync, no synchronized moderation, no FTN/ActivityPub
-  interoperability, full-log exchange per round, seeds/presence/chat
-  per-node, and an open sync endpoint when `SYNC_SECRET` is unset.
-- Live display limit: a notice clears one terminal line; if partial
+- Federation limits (by design, disclosed in the README): no
+  synchronized moderation, no FTN/ActivityPub interoperability,
+  full-log exchange per round, seeds/presence/chat per-node, edit
+  conflicts resolved by origin wall clock, federated scores trusting
+  the peer set, and an open sync endpoint when `SYNC_SECRET` is unset.
+  Edit/delete sync, formerly listed here, was closed 19 Nov 2026.
+- ~~Live display limit: a notice clears one terminal line; if partial
   input wrapped onto several lines, fragments above the last line may
-  remain until the next screen render (the input buffer is always
-  intact).
+  remain until the next screen render~~ — fixed 19 Nov 2026: the frame
+  is width-aware and clears every wrapped input line (frame tests +
+  narrow-width screenshot).
 
 ## Monch gates, in order
 

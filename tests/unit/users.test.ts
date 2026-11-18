@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { AuthError, ValidationError } from '../../src/shared/errors.js';
-import { hashPasscode } from '../../src/users/users.js';
+import { hashPasscode, hashPasscodeLegacy, verifyPasscode } from '../../src/users/users.js';
 import { newCharacter } from '../../src/game/catacomb.js';
 import { createTestEnv, type TestEnv } from '../helpers.js';
 
@@ -16,7 +16,9 @@ describe('UserStore', () => {
     const user = await env.deps.users.createUser('Deadknight', 's3cr3t!', now);
     expect(user.handle).toBe('Deadknight');
     expect(user.passwordHash).not.toContain('s3cr3t');
-    expect(user.passwordHash).toBe(hashPasscode(user.salt, 's3cr3t!'));
+    // PRO-DEV: PBKDF2 self-describing format (600,000 iterations, OWASP).
+    expect(user.passwordHash).toMatch(/^pbkdf2-sha256\$600000\$[0-9a-f]{64}$/);
+    expect(user.passwordHash).toBe(await hashPasscode(user.salt, 's3cr3t!'));
     expect(user.salt).toMatch(/^[0-9a-f]{32}$/);
     expect(user.createdAt).toBe(now.toISOString());
     expect(user.gameCharacter).toBeNull();
@@ -104,5 +106,68 @@ describe('UserStore', () => {
     const character = newCharacter(user.id, '2026-11-19');
     await env.deps.users.saveCharacter(user.id, character);
     expect(await env.deps.users.getCharacter(user.id)).toEqual(character);
+  });
+});
+
+describe('PBKDF2 migration (PRO-DEV)', () => {
+  /** Write a pre-PRO-DEV users.json with a single-round SHA-256 hash. */
+  async function seedLegacyAccount(env: TestEnv): Promise<void> {
+    const { writeFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const salt = '0123456789abcdef0123456789abcdef';
+    const record = {
+      id: 'legacy-user-1',
+      handle: 'Oldtimer',
+      passwordHash: hashPasscodeLegacy(salt, 'pass1234'),
+      salt,
+      createdAt: '2026-11-15T00:00:00.000Z',
+      lastLoginAt: '2026-11-15T00:00:00.000Z',
+      readMarkers: {},
+      gameCharacter: null,
+    };
+    await writeFile(join(env.dataDir, 'users.json'), JSON.stringify({ users: [record] }));
+  }
+
+  it('authenticates a legacy account and migrates it to PBKDF2', async () => {
+    env = await createTestEnv();
+    await seedLegacyAccount(env);
+    const now = new Date('2026-11-19T12:00:00.000Z');
+    const user = await env.deps.users.authenticate('oldtimer', 'pass1234', now);
+    expect(user.passwordHash).toMatch(/^pbkdf2-sha256\$600000\$[0-9a-f]{64}$/);
+    expect(user.salt).toMatch(/^[0-9a-f]{32}$/);
+    expect(user.salt).not.toBe('0123456789abcdef0123456789abcdef');
+    expect(user.lastLoginAt).toBe(now.toISOString());
+    // The migrated account logs in again with the new hash.
+    const again = await env.deps.users.authenticate('Oldtimer', 'pass1234', now);
+    expect(again.passwordHash).toBe(user.passwordHash);
+    expect(again.salt).toBe(user.salt);
+  });
+
+  it('rejects a wrong passcode for a legacy account without migrating it', async () => {
+    env = await createTestEnv();
+    await seedLegacyAccount(env);
+    await expect(
+      env.deps.users.authenticate('Oldtimer', 'wrongpass', new Date()),
+    ).rejects.toBeInstanceOf(AuthError);
+    const stored = await env.deps.users.findUser('Oldtimer');
+    expect(stored?.passwordHash).toBe(
+      hashPasscodeLegacy('0123456789abcdef0123456789abcdef', 'pass1234'),
+    );
+    expect(stored?.salt).toBe('0123456789abcdef0123456789abcdef');
+  });
+
+  it('verifies PBKDF2 hashes and rejects tampered or malformed ones', async () => {
+    const salt = '0123456789abcdef0123456789abcdef';
+    const stored = await hashPasscode(salt, 'pass1234');
+    expect(await verifyPasscode(stored, salt, 'pass1234')).toBe(true);
+    expect(await verifyPasscode(stored, salt, 'pass1235')).toBe(false);
+    // Tampered key bytes, same length: timing-safe compare must say no.
+    const tampered = stored.slice(0, -1) + (stored.endsWith('0') ? '1' : '0');
+    expect(await verifyPasscode(tampered, salt, 'pass1234')).toBe(false);
+    // Malformed formats fail closed, never throw.
+    expect(await verifyPasscode('pbkdf2-sha256$999999999$' + 'a'.repeat(64), salt, 'pass1234')).toBe(false);
+    expect(await verifyPasscode('pbkdf2-sha256$0$' + 'a'.repeat(64), salt, 'pass1234')).toBe(false);
+    expect(await verifyPasscode('not-a-hash', salt, 'pass1234')).toBe(false);
+    expect(await verifyPasscode('', salt, 'pass1234')).toBe(false);
   });
 });

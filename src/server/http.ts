@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { getDownloadInfo } from '../files/filearea.js';
 import { FileAreaError } from '../shared/errors.js';
 import type { ApiHandler } from '../sync/api.js';
+import type { ArchiveHandler } from './archive.js';
 import type { RunningServer } from './telnet.js';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -36,6 +37,9 @@ export interface HttpServerOptions {
   /** Optional handler for /sync/exchange and /api/*. Runs before the
    *  method check: the sync endpoint needs POST. */
   onApi?: ApiHandler;
+  /** Optional handler for the public read-only /archive page. Runs after
+   *  the method check, so only GET/HEAD ever reach it. */
+  onArchive?: ArchiveHandler;
 }
 
 function sendText(
@@ -69,6 +73,11 @@ export function startHttpServer(options: HttpServerOptions): Promise<RunningServ
         if (req.method !== 'GET' && req.method !== 'HEAD') {
           sendText(res, 405, 'Method not allowed.');
           return;
+        }
+
+        if (pathname === '/archive' && options.onArchive !== undefined) {
+          const handled = await options.onArchive(req, res);
+          if (handled) return;
         }
 
         if (pathname.startsWith('/files/')) {

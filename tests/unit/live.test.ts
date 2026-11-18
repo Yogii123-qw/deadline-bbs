@@ -226,3 +226,91 @@ describe('validateChatMessage', () => {
     expect(validateChatMessage('hi\x1b[31mred')).toBe('hired');
   });
 });
+
+describe('buildLiveFrame width-aware clearing (PRO-DEV)', () => {
+  it('is byte-identical to the legacy frame when the line fits the width', () => {
+    expect(buildLiveFrame('NOTICE', 'Choice: ', '1', false, 80)).toBe(
+      '\r\x1b[2KNOTICE\nChoice: 1',
+    );
+    expect(buildLiveFrame('NOTICE', 'Choice: ', '1', false, 40)).toBe(
+      '\r\x1b[2KNOTICE\nChoice: 1',
+    );
+  });
+
+  it('clears two visual lines when prompt + input wraps once', () => {
+    const partial = 'x'.repeat(40);
+    const frame = buildLiveFrame('NOTICE', 'Choice: ', partial, false, 40);
+    expect(frame).toBe(`\r\x1b[2K\x1b[1A\x1b[2KNOTICE\nChoice: ${partial}`);
+  });
+
+  it('clears three visual lines when the input wraps twice', () => {
+    const partial = 'x'.repeat(80);
+    const frame = buildLiveFrame('NOTICE', 'Choice: ', partial, false, 40);
+    expect(frame).toBe(`\r\x1b[2K\x1b[1A\x1b[2K\x1b[1A\x1b[2KNOTICE\nChoice: ${partial}`);
+  });
+
+  it('treats an exact width multiple as fitting on one line', () => {
+    // 8 (prompt) + 32 = 40 = width: cursor sits at the end of line 1.
+    expect(buildLiveFrame('NOTICE', 'Choice: ', 'x'.repeat(32), false, 40)).toBe(
+      `\r\x1b[2KNOTICE\nChoice: ${'x'.repeat(32)}`,
+    );
+    // One more character wraps to line 2.
+    expect(buildLiveFrame('NOTICE', 'Choice: ', 'x'.repeat(33), false, 40)).toBe(
+      `\r\x1b[2K\x1b[1A\x1b[2KNOTICE\nChoice: ${'x'.repeat(33)}`,
+    );
+  });
+
+  it('measures the prompt without its ANSI codes', () => {
+    const prompt = '\x1b[36mChoice: \x1b[0m';
+    const frame = buildLiveFrame('NOTICE', prompt, 'x'.repeat(35), false, 40);
+    // Visible length is 8 + 35 = 43: two lines, not five.
+    expect(frame).toBe(`\r\x1b[2K\x1b[1A\x1b[2KNOTICE\n${prompt}${'x'.repeat(35)}`);
+  });
+
+  it('falls back to the legacy frame for pathological widths', () => {
+    const frame = buildLiveFrame('NOTICE', 'Choice: ', 'x'.repeat(60), false, 10);
+    expect(frame).toBe(`\r\x1b[2KNOTICE\nChoice: ${'x'.repeat(60)}`);
+    expect(frame).not.toContain('\x1b[1A');
+  });
+
+  it('counts masked echo by length, same as unmasked', () => {
+    const frame = buildLiveFrame('NOTICE', 'Passcode: ', 's'.repeat(40), true, 40);
+    expect(frame).toBe(`\r\x1b[2K\x1b[1A\x1b[2KNOTICE\nPasscode: ${'*'.repeat(40)}`);
+    expect(frame).not.toContain('s'.repeat(40));
+  });
+});
+
+describe('renderLiveNotice edit events (PRO-DEV)', () => {
+  it('renders local edits and deletes', () => {
+    const edited: LiveEvent = {
+      kind: 'edit',
+      fromId: 'a',
+      handle: 'Alice',
+      boardName: 'General Discussion',
+      subject: 'Hello board',
+      action: 'edited',
+    };
+    expect(stripAnsi(renderLiveNotice(edited))).toBe(
+      '» LIVE: Alice edited "Hello board" in General Discussion',
+    );
+    const deleted: LiveEvent = { ...edited, action: 'deleted' };
+    expect(stripAnsi(renderLiveNotice(deleted))).toBe(
+      '» LIVE: Alice deleted "Hello board" in General Discussion',
+    );
+  });
+
+  it('renders federated edits with the origin node', () => {
+    const remote: LiveEvent = {
+      kind: 'edit',
+      fromId: '__deadline_remote__',
+      handle: 'Bob',
+      boardName: 'General Discussion',
+      subject: 'Remote post',
+      action: 'deleted',
+      originNode: 'node-b',
+    };
+    expect(stripAnsi(renderLiveNotice(remote))).toBe(
+      '» LIVE: Bob deleted "Remote post" in General Discussion (via node node-b)',
+    );
+  });
+});

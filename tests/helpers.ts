@@ -83,7 +83,7 @@ export async function createTestEnv(
       new AtomicStore<ScoresData>(
         path.join(dataDir, 'scores.json'),
         zScoresStore,
-        { entries: [] },
+        { entries: [], network: [] },
         (m) => warnings.push(m),
       ),
     ),

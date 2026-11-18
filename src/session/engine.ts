@@ -22,6 +22,7 @@ import type {
 } from '../shared/types.js';
 import type { BoardStore } from '../boards/boards.js';
 import { comparePosts } from '../boards/boards.js';
+import type { NodeStatusData } from '../sync/engine.js';
 import { searchBoards } from '../boards/search.js';
 import type { UserStore } from '../users/users.js';
 import type { ScoreStore } from '../game/scores.js';
@@ -66,12 +67,31 @@ import {
   goodbyeScreen,
   hallOfFameScreen,
   mainMenu,
+  nodeStatusScreen,
   searchResultsScreen,
   splashScreen,
   threadListScreen,
   threadViewScreen,
   whoOnlineScreen,
 } from './screens.js';
+
+/**
+ * Transient per-session edit/delete state (PRO-DEV amendment §6.2).
+ * SessionState and BoardContext live in the Kiro-authored types file and
+ * cannot gain fields, so edit targets and delete confirmations live in
+ * this map on EngineDeps. A draft is only ever honored when the session
+ * is in the phase and thread the draft names; anything else is stale and
+ * ignored. Transports discard drafts on disconnect.
+ */
+export type SessionDraft =
+  | {
+      kind: 'edit';
+      postId: string;
+      threadId: string;
+      boardId: string;
+      originalSubject: string;
+    }
+  | { kind: 'delete-confirm'; postId: string; threadId: string; boardId: string };
 
 export interface EngineDeps {
   users: UserStore;
@@ -87,6 +107,41 @@ export interface EngineDeps {
   live?: LiveHub;
   /** Sync log: when absent, local posts are not recorded for federation. */
   syncLog?: SyncLogStore;
+  /** Per-session edit/delete drafts (see SessionDraft). Created lazily. */
+  sessionDrafts?: Map<string, SessionDraft>;
+  /** Sync stats provider for NODE STATUS; absent = federation not wired. */
+  syncStats?: () => Promise<NodeStatusData>;
+}
+
+/** Drop a session's drafts (transports call this on disconnect). */
+export function discardSessionDrafts(sessionId: string, deps: EngineDeps): void {
+  deps.sessionDrafts?.delete(sessionId);
+}
+
+function ensureDrafts(deps: EngineDeps): Map<string, SessionDraft> {
+  deps.sessionDrafts ??= new Map<string, SessionDraft>();
+  return deps.sessionDrafts;
+}
+
+/** The edit draft for this session, honored only in its own context. */
+function getEditDraft(deps: EngineDeps, state: SessionState): Extract<SessionDraft, { kind: 'edit' }> | undefined {
+  const draft = deps.sessionDrafts?.get(state.id);
+  if (draft === undefined || draft.kind !== 'edit') return undefined;
+  if (state.phase !== 'COMPOSING_POST') return undefined;
+  if (state.boardContext?.threadId !== draft.threadId) return undefined;
+  return draft;
+}
+
+/** The delete-confirm draft for this session, honored only in its own context. */
+function getDeleteDraft(
+  deps: EngineDeps,
+  state: SessionState,
+): Extract<SessionDraft, { kind: 'delete-confirm' }> | undefined {
+  const draft = deps.sessionDrafts?.get(state.id);
+  if (draft === undefined || draft.kind !== 'delete-confirm') return undefined;
+  if (state.phase !== 'READING_THREAD') return undefined;
+  if (state.boardContext?.threadId !== draft.threadId) return undefined;
+  return draft;
 }
 
 export interface EngineInput {
@@ -177,10 +232,10 @@ async function unreadPostIds(
   const user = state.userId === null ? null : await deps.users.findById(state.userId);
   const markerId = user?.readMarkers[boardId];
   const data = await deps.boards.readData();
+  // The marker resolves against raw data: a marker pointing at a deleted
+  // post must still order correctly (see findPostRaw).
   const markerPost =
-    markerId === undefined
-      ? null
-      : data.threads.flatMap((t) => t.posts).find((p) => p.id === markerId) ?? null;
+    markerId === undefined ? null : await deps.boards.findPostRaw(markerId);
   const ids = new Set<string>();
   for (const thread of data.threads) {
     if (thread.boardId !== boardId) continue;
@@ -208,8 +263,8 @@ async function advanceMarker(
   const markerId = user.readMarkers[thread.boardId];
   if (markerId === newestId) return;
   if (markerId !== undefined) {
-    const markerPost = await deps.boards.findPost(markerId);
-    const newestPost = await deps.boards.findPost(newestId);
+    const markerPost = await deps.boards.findPostRaw(markerId);
+    const newestPost = await deps.boards.findPostRaw(newestId);
     if (markerPost !== null && newestPost !== null && comparePosts(newestPost, markerPost) <= 0) {
       return;
     }
@@ -241,7 +296,12 @@ async function threadViewOutput(state: SessionState, deps: EngineDeps): Promise<
     throw new GameError('No thread selected.');
   }
   const thread = await deps.boards.getThread(ctx.threadId);
-  return threadViewScreen(thread, ctx.page, renderWidth(state));
+  const data = await deps.boards.readData();
+  const editedAtByPost: Record<string, string> = {};
+  for (const [postId, meta] of Object.entries(data.postMeta)) {
+    editedAtByPost[postId] = meta.editedAt;
+  }
+  return threadViewScreen(thread, ctx.page, renderWidth(state), editedAtByPost);
 }
 
 async function fileListOutput(state: SessionState, deps: EngineDeps): Promise<string> {
@@ -276,7 +336,8 @@ async function catacombOutput(
 
 async function hallOfFameOutput(state: SessionState, deps: EngineDeps): Promise<string> {
   const entries = await deps.scores.getHallOfFame();
-  return hallOfFameScreen(entries, renderWidth(state));
+  const network = await deps.scores.getNetworkScores();
+  return hallOfFameScreen(entries, renderWidth(state), network);
 }
 
 function whoOnlineOutput(state: SessionState, deps: EngineDeps): string {
@@ -359,6 +420,24 @@ async function handleChatCommand(
   };
 }
 
+/**
+ * One-shot NODE STATUS from the main menu: `7` prints live federation
+ * state from the sync engine, then the menu. No new session phase (the
+ * chat-help pattern). Errors throw ValidationError, rendered as error +
+ * menu re-render like every other recoverable menu error.
+ */
+async function handleNodeStatus(state: SessionState, deps: EngineDeps): Promise<EngineOutput> {
+  const next = menuState(state);
+  if (deps.syncStats === undefined) {
+    throw new ValidationError('Node status is not available right now.');
+  }
+  const stats = await deps.syncStats();
+  return {
+    state: next,
+    output: `${nodeStatusScreen(stats, renderWidth(state))}\n${await menuOutput(next, deps)}`,
+  };
+}
+
 /** Re-render the current phase's screen (used after recoverable errors). */
 async function renderPhase(state: SessionState, deps: EngineDeps): Promise<string> {
   const width = renderWidth(state);
@@ -382,11 +461,18 @@ async function renderPhase(state: SessionState, deps: EngineDeps): Promise<strin
       return threadListOutput(state, deps);
     case 'READING_THREAD':
       return threadViewOutput(state, deps);
-    case 'COMPOSING_POST':
+    case 'COMPOSING_POST': {
+      const editDraft = getEditDraft(deps, state);
       return composeScreen(
-        state.boardContext?.composingSubject === null ? 'Subject:' : 'Message (end with .):',
+        state.boardContext?.composingSubject === null
+          ? editDraft !== undefined
+            ? 'New subject (Enter keeps the current one):'
+            : 'Subject:'
+          : 'Message (end with .):',
         width,
+        editDraft !== undefined,
       );
+    }
     case 'COMPOSING_REPLY':
       return composeScreen('Message (end with .):', width);
     case 'SEARCH_PROMPT':
@@ -436,6 +522,154 @@ async function enterThread(
     },
   };
   return { state: next, output: await threadViewOutput(next, deps) };
+}
+
+/** Resolve post #n of the visible thread, enforcing author-only + no-archive. */
+async function resolveEditablePost(
+  state: SessionState,
+  deps: EngineDeps,
+  ctx: BoardContext,
+  n: number,
+  verb: 'edit' | 'delete',
+): Promise<{ post: Post; thread: Thread } | EngineOutput> {
+  const thread = ctx.threadId === null ? null : await deps.boards.getThread(ctx.threadId);
+  if (thread === null) throw new GameError('No thread selected.');
+  const post = thread.posts[n - 1];
+  const refuse = async (message: string): Promise<EngineOutput> => ({
+    state,
+    output: `${errorScreen(message)}\n${await threadViewOutput(state, deps)}`,
+  });
+  if (post === undefined) {
+    return refuse(`No post #${n} in this thread.`);
+  }
+  if (post.isArchive) {
+    return refuse(`Archive posts from 1994 cannot be ${verb === 'edit' ? 'edited' : 'deleted'}.`);
+  }
+  if (state.handle === null || post.authorHandle.toLowerCase() !== state.handle.toLowerCase()) {
+    return refuse(`You can only ${verb} your own posts.`);
+  }
+  return { post, thread };
+}
+
+async function startEdit(
+  state: SessionState,
+  deps: EngineDeps,
+  ctx: BoardContext,
+  n: number,
+): Promise<EngineOutput> {
+  const resolved = await resolveEditablePost(state, deps, ctx, n, 'edit');
+  if ('output' in resolved) return resolved;
+  ensureDrafts(deps).set(state.id, {
+    kind: 'edit',
+    postId: resolved.post.id,
+    threadId: resolved.thread.id,
+    boardId: resolved.thread.boardId,
+    originalSubject: resolved.post.subject,
+  });
+  const next: SessionState = {
+    ...state,
+    phase: 'COMPOSING_POST',
+    boardContext: { ...ctx, composingSubject: null, composingBody: null },
+  };
+  return {
+    state: next,
+    output: composeScreen('New subject (Enter keeps the current one):', renderWidth(state), true),
+  };
+}
+
+async function startDelete(
+  state: SessionState,
+  deps: EngineDeps,
+  ctx: BoardContext,
+  n: number,
+): Promise<EngineOutput> {
+  const resolved = await resolveEditablePost(state, deps, ctx, n, 'delete');
+  if ('output' in resolved) return resolved;
+  ensureDrafts(deps).set(state.id, {
+    kind: 'delete-confirm',
+    postId: resolved.post.id,
+    threadId: resolved.thread.id,
+    boardId: resolved.thread.boardId,
+  });
+  return {
+    state,
+    output: `\n  Delete your post #${n}? This cannot be undone, here or on any peer.\n  Type DELETE to confirm, or anything else to cancel.\n\nCommand: `,
+  };
+}
+
+async function confirmDelete(
+  state: SessionState,
+  deps: EngineDeps,
+  ctx: BoardContext,
+  draft: Extract<SessionDraft, { kind: 'delete-confirm' }>,
+): Promise<EngineOutput> {
+  const post = await deps.boards.findPost(draft.postId);
+  if (
+    post === null ||
+    state.handle === null ||
+    post.authorHandle.toLowerCase() !== state.handle.toLowerCase()
+  ) {
+    return {
+      state,
+      output: `\n  That post is already gone.\n${await threadViewOutput(state, deps)}`,
+    };
+  }
+  const at = deps.now().toISOString();
+  const entryId = deps.syncLog?.createEntryId() ?? `local:${randomUUID()}`;
+  const status = await deps.boards.applyTombstone({
+    postId: draft.postId,
+    threadId: draft.threadId,
+    boardId: draft.boardId,
+    authorHandle: state.handle,
+    at,
+    entryId,
+  });
+  if (status !== 'applied' && status !== 'already') {
+    return {
+      state,
+      output: `\n  That post can no longer be deleted.\n${await threadViewOutput(state, deps)}`,
+    };
+  }
+  if (deps.syncLog !== undefined) {
+    await deps.syncLog.appendLocal(
+      'tombstone',
+      {
+        postId: draft.postId,
+        threadId: draft.threadId,
+        boardId: draft.boardId,
+        authorHandle: state.handle,
+      },
+      at,
+      entryId,
+    );
+  }
+  const board = await deps.boards.getBoard(draft.boardId);
+  deps.live?.publish({
+    kind: 'edit',
+    fromId: state.id,
+    handle: state.handle,
+    boardName: board.name,
+    subject: post.subject,
+    action: 'deleted',
+  });
+  const updated = await deps.boards.getThread(draft.threadId);
+  if (updated.posts.length === 0) {
+    const next: SessionState = {
+      ...state,
+      phase: 'THREAD_LIST',
+      boardContext: { ...ctx, threadId: null, page: 0 },
+    };
+    return {
+      state: next,
+      output: `\n  Post deleted. The thread is now empty.\n${await threadListOutput(next, deps)}`,
+    };
+  }
+  const page = Math.min(ctx.page, Math.max(0, Math.ceil(updated.posts.length / POSTS_PER_PAGE) - 1));
+  const next: SessionState = { ...state, boardContext: { ...ctx, page } };
+  return {
+    state: next,
+    output: `\n  Post deleted.\n${await threadViewOutput(next, deps)}`,
+  };
 }
 
 async function dispatch(
@@ -626,6 +860,9 @@ async function dispatch(
       if (cmd === '6' || cmd.startsWith('6 ')) {
         return handleChatCommand(state, deps, input, width);
       }
+      if (cmd === '7') {
+        return handleNodeStatus(state, deps);
+      }
       if (cmd === 'G') {
         const next: SessionState = { ...state, phase: 'LOGOFF' };
         return {
@@ -636,7 +873,7 @@ async function dispatch(
       const next = menuState(state);
       return {
         state: next,
-        output: `${errorScreen('Unknown choice. Pick 1-6 or G.')}\n${await menuOutput(next, deps)}`,
+        output: `${errorScreen('Unknown choice. Pick 1-7 or G.')}\n${await menuOutput(next, deps)}`,
       };
     }
 
@@ -718,6 +955,19 @@ async function dispatch(
 
     case 'READING_THREAD': {
       const ctx = state.boardContext ?? emptyBoardContext();
+      // A pending delete confirmation consumes the next input wholesale:
+      // DELETE confirms, anything else cancels.
+      const pendingDelete = getDeleteDraft(deps, state);
+      if (pendingDelete !== undefined) {
+        deps.sessionDrafts?.delete(state.id);
+        if (cmd === 'DELETE') {
+          return confirmDelete(state, deps, ctx, pendingDelete);
+        }
+        return {
+          state,
+          output: `\n  Delete cancelled.\n${await threadViewOutput(state, deps)}`,
+        };
+      }
       if (cmd === 'Q') {
         const next: SessionState = {
           ...state,
@@ -734,6 +984,14 @@ async function dispatch(
         };
         return { state: next, output: composeScreen('Message (end with .):', width) };
       }
+      const editMatch = /^E\s*(\d+)$/.exec(cmd);
+      if (editMatch !== null) {
+        return startEdit(state, deps, ctx, Number.parseInt(editMatch[1], 10));
+      }
+      const deleteMatch = /^D\s*(\d+)$/.exec(cmd);
+      if (deleteMatch !== null) {
+        return startDelete(state, deps, ctx, Number.parseInt(deleteMatch[1], 10));
+      }
       if (cmd === '' || cmd === ' ') {
         const thread = ctx.threadId === null ? null : await deps.boards.getThread(ctx.threadId);
         const totalPages = Math.max(
@@ -748,14 +1006,23 @@ async function dispatch(
       }
       return {
         state,
-        output: `${errorScreen('Enter: more · R: reply · Q: back.')}\n${await threadViewOutput(state, deps)}`,
+        output: `${errorScreen('Enter: more · R: reply · E<n>: edit · D<n>: delete · Q: back.')}\n${await threadViewOutput(state, deps)}`,
       };
     }
 
     case 'COMPOSING_POST': {
       const ctx = state.boardContext ?? emptyBoardContext();
+      const editDraft = getEditDraft(deps, state);
       if (ctx.composingSubject === null) {
         if (input.trim() === '') {
+          if (editDraft !== undefined) {
+            // Editing: an empty subject line keeps the current subject.
+            const next: SessionState = {
+              ...state,
+              boardContext: { ...ctx, composingSubject: editDraft.originalSubject },
+            };
+            return { state: next, output: composeScreen('Message (end with .):', width, true) };
+          }
           const next: SessionState = {
             ...state,
             phase: 'THREAD_LIST',
@@ -766,16 +1033,16 @@ async function dispatch(
         if (input.trim().length > SUBJECT_MAX) {
           return {
             state,
-            output: `${errorScreen(`Subject must be at most ${SUBJECT_MAX} characters.`)}\n${composeScreen('Subject:', width)}`,
+            output: `${errorScreen(`Subject must be at most ${SUBJECT_MAX} characters.`)}\n${composeScreen(editDraft !== undefined ? 'New subject (Enter keeps the current one):' : 'Subject:', width, editDraft !== undefined)}`,
           };
         }
         const next: SessionState = {
           ...state,
           boardContext: { ...ctx, composingSubject: input.trim() },
         };
-        return { state: next, output: composeScreen('Message (end with .):', width) };
+        return { state: next, output: composeScreen('Message (end with .):', width, editDraft !== undefined) };
       }
-      return composeBody(state, deps, ctx, input, false);
+      return composeBody(state, deps, ctx, input, false, editDraft);
     }
 
     case 'COMPOSING_REPLY': {
@@ -965,6 +1232,16 @@ async function dispatch(
           handle: state.handle ?? 'unknown',
           level: victorious.level,
         });
+        // Federated Hall of Fame (PRO-DEV): the victory flows through the
+        // same sync log as posts, via the seam above — the game module
+        // itself is untouched. A failed append never blocks the victory.
+        if (deps.syncLog !== undefined) {
+          await deps.syncLog.appendLocal(
+            'score',
+            { handle: state.handle ?? 'unknown', level: victorious.level },
+            deps.now().toISOString(),
+          );
+        }
         const next: SessionState = {
           ...state,
           phase: 'HALL_OF_FAME',
@@ -1027,18 +1304,22 @@ function boldVictory(): string {
   return 'VICTORY! The Crypt Lord falls. Your name enters the Hall of Fame.';
 }
 
-/** Shared body-composition flow for new posts and replies. */
+/** Shared body-composition flow for new posts, replies, and edits. */
 async function composeBody(
   state: SessionState,
   deps: EngineDeps,
   ctx: BoardContext,
   input: string,
   isReply: boolean,
+  editDraft?: Extract<SessionDraft, { kind: 'edit' }>,
 ): Promise<EngineOutput> {
   const width = renderWidth(state);
   const trimmed = input.trim();
   if (trimmed === '.') {
     const body = ctx.composingBody ?? '';
+    if (editDraft !== undefined) {
+      return finishEdit(state, deps, ctx, editDraft, body);
+    }
     if (isReply) {
       if (ctx.threadId === null) throw new GameError('No thread selected.');
       const thread = await deps.boards.getThread(ctx.threadId);
@@ -1100,6 +1381,15 @@ async function composeBody(
     };
   }
   if (trimmed === 'ABORT') {
+    if (editDraft !== undefined) {
+      deps.sessionDrafts?.delete(state.id);
+      const next: SessionState = {
+        ...state,
+        phase: 'READING_THREAD',
+        boardContext: { ...ctx, composingSubject: null, composingBody: null },
+      };
+      return { state: next, output: await threadViewOutput(next, deps) };
+    }
     if (isReply) {
       const next: SessionState = {
         ...state,
@@ -1120,7 +1410,7 @@ async function composeBody(
   if (candidate.length > BODY_MAX) {
     return {
       state,
-      output: `${errorScreen(`Message is at the ${BODY_MAX}-character limit. End with . or ABORT.`)}\n${composeScreen('Message (end with .):', width)}`,
+      output: `${errorScreen(`Message is at the ${BODY_MAX}-character limit. End with . or ABORT.`)}\n${composeScreen('Message (end with .):', width, editDraft !== undefined)}`,
     };
   }
   const next: SessionState = {
@@ -1128,6 +1418,81 @@ async function composeBody(
     boardContext: { ...ctx, composingBody: candidate },
   };
   return { state: next, output: '' };
+}
+
+/** Apply a finished edit: board store first, then the federation log. */
+async function finishEdit(
+  state: SessionState,
+  deps: EngineDeps,
+  ctx: BoardContext,
+  draft: Extract<SessionDraft, { kind: 'edit' }>,
+  body: string,
+): Promise<EngineOutput> {
+  const clean = validatePost(ctx.composingSubject ?? draft.originalSubject, body);
+  const at = deps.now().toISOString();
+  const entryId = deps.syncLog?.createEntryId() ?? `local:${randomUUID()}`;
+  const status = await deps.boards.applyEdit({
+    postId: draft.postId,
+    threadId: draft.threadId,
+    boardId: draft.boardId,
+    authorHandle: state.handle ?? 'unknown',
+    subject: clean.subject,
+    body: clean.body,
+    at,
+    entryId,
+  });
+  deps.sessionDrafts?.delete(state.id);
+  if (status !== 'applied' && status !== 'superseded') {
+    const next: SessionState = {
+      ...state,
+      phase: 'READING_THREAD',
+      boardContext: { ...ctx, composingSubject: null, composingBody: null },
+    };
+    return {
+      state: next,
+      output: `\n  That post can no longer be edited.\n${await threadViewOutput(next, deps)}`,
+    };
+  }
+  if (deps.syncLog !== undefined) {
+    await deps.syncLog.appendLocal(
+      'edit',
+      {
+        postId: draft.postId,
+        threadId: draft.threadId,
+        boardId: draft.boardId,
+        authorHandle: state.handle ?? 'unknown',
+        subject: clean.subject,
+        body: clean.body,
+      },
+      at,
+      entryId,
+    );
+  }
+  const board = await deps.boards.getBoard(draft.boardId);
+  deps.live?.publish({
+    kind: 'edit',
+    fromId: state.id,
+    handle: state.handle ?? 'unknown',
+    boardName: board.name,
+    subject: clean.subject,
+    action: 'edited',
+  });
+  const updated = await deps.boards.getThread(draft.threadId);
+  const idx = updated.posts.findIndex((p) => p.id === draft.postId);
+  const page = idx === -1 ? 0 : Math.floor(idx / POSTS_PER_PAGE);
+  const next: SessionState = {
+    ...state,
+    phase: 'READING_THREAD',
+    boardContext: { ...ctx, composingSubject: null, composingBody: null, page },
+  };
+  const note =
+    status === 'applied'
+      ? 'Post edited.'
+      : 'Post edited — but a newer edit from the network already stands.';
+  return {
+    state: next,
+    output: `\n  ${note}\n${await threadViewOutput(next, deps)}`,
+  };
 }
 
 export async function processInput(ctx: EngineInput): Promise<EngineOutput> {

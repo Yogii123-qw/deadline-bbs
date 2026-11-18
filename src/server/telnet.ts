@@ -10,6 +10,7 @@ import * as net from 'node:net';
 import { TelnetNegotiator } from '../telnet/negotiation.js';
 import { LineReader } from '../session/input.js';
 import {
+  discardSessionDrafts,
   newSession,
   processInput,
   redrawGreeting,
@@ -53,6 +54,7 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<Running
 
     const cleanup = (): void => {
       sockets.delete(socket);
+      discardSessionDrafts(state.id, deps);
       const wasOnline = deps.activeSessions.delete(state.id);
       if (wasOnline && state.handle !== null) {
         deps.live?.publish({ kind: 'leave', fromId: state.id, handle: state.handle });
@@ -80,6 +82,7 @@ export function startTelnetServer(options: TelnetServerOptions): Promise<Running
             currentPrompt,
             lineReader.pendingInput(),
             PASSCODE_PHASES.has(state.phase),
+            state.terminalWidth,
           );
           socket.write(toCRLF(frame));
         })

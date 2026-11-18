@@ -228,5 +228,7 @@ export function seedBoardsData(): BoardsData {
         ],
       },
     ],
+    postMeta: {},
+    tombstones: {},
   };
 }

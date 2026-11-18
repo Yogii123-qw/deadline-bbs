@@ -9,6 +9,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { LineReader } from '../session/input.js';
 import {
+  discardSessionDrafts,
   newSession,
   processInput,
   redrawGreeting,
@@ -40,6 +41,7 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
   const cleanup = (): void => {
     if (cleanedUp) return;
     cleanedUp = true;
+    discardSessionDrafts(state.id, deps);
     const wasOnline = deps.activeSessions.delete(state.id);
     if (wasOnline && state.handle !== null) {
       deps.live?.publish({ kind: 'leave', fromId: state.id, handle: state.handle });
@@ -65,6 +67,7 @@ export function attachConnection(ws: WebSocket, deps: EngineDeps): void {
           currentPrompt,
           lineReader.pendingInput(),
           PASSCODE_PHASES.has(state.phase),
+          state.terminalWidth,
         );
         ws.send(toCRLF(frame));
       })

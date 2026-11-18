@@ -13,6 +13,8 @@
  * sync entries carry data, the hub carries moments.
  */
 
+import { stripAnsi } from '../telnet/ansi.js';
+
 /** A moment worth telling other callers about, while they are connected. */
 export type LiveEvent =
   | {
@@ -24,6 +26,16 @@ export type LiveEvent =
       subject: string;
       isReply: boolean;
       /** Set when the post arrived via federation: the origin node's id. */
+      originNode?: string;
+    }
+  | {
+      kind: 'edit';
+      fromId: string;
+      handle: string;
+      boardName: string;
+      subject: string;
+      action: 'edited' | 'deleted';
+      /** Set when the edit arrived via federation: the origin node's id. */
       originNode?: string;
     }
   | { kind: 'victory'; fromId: string; handle: string; level: number }
@@ -103,15 +115,18 @@ export function trailingPrompt(output: string): string {
 
 /**
  * Frame a rendered live notice for delivery over a connection that may be
- * mid-keystroke. The frame clears the current terminal line, prints the
- * notice, then redraws the prompt plus the partial input the caller had
- * already typed — the input buffer itself is never touched, so the caller
- * keeps typing exactly where they were.
+ * mid-keystroke. The frame clears the terminal lines the prompt plus
+ * partial input occupies, prints the notice, then redraws the prompt plus
+ * the partial input the caller had already typed — the input buffer
+ * itself is never touched, so the caller keeps typing exactly where
+ * they were.
  *
- * Honest display limit: only ONE line is cleared. If the partial input
- * wrapped onto several terminal lines, fragments above the last line may
- * remain visible until the next screen render; the buffer stays intact
- * in all cases.
+ * When `width` is given (the connection's negotiated terminal width) and
+ * the prompt plus input wraps onto several visual lines, the frame moves
+ * up and erases every occupied line (CUU + EL per line), so no fragments
+ * remain above the notice. Without a width, or when the line fits, or
+ * when the width is pathologically small (< 20), the frame is exactly
+ * the historical one-line form, byte for byte.
  *
  * `rendered` must not end with a newline. The frame uses "\n" line endings;
  * transports normalize to CRLF on write, as with all engine output.
@@ -121,7 +136,17 @@ export function buildLiveFrame(
   prompt: string,
   partial: string,
   masked: boolean,
+  width?: number,
 ): string {
   const echo = masked ? '*'.repeat(partial.length) : partial;
-  return `\r\x1b[2K${rendered}\n${prompt}${echo}`;
+  const visibleLen = stripAnsi(prompt).length + echo.length;
+  if (width === undefined || width < 20 || visibleLen <= width) {
+    return `\r\x1b[2K${rendered}\n${prompt}${echo}`;
+  }
+  const lines = Math.ceil(visibleLen / width);
+  let clear = '\r\x1b[2K';
+  for (let i = 1; i < lines; i += 1) {
+    clear += '\x1b[1A\x1b[2K';
+  }
+  return `${clear}${rendered}\n${prompt}${echo}`;
 }

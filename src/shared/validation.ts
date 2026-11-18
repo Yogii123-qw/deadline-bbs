@@ -93,9 +93,28 @@ export const zThread = z.object({
   posts: z.array(zPost),
 });
 
+/**
+ * Edit overlay (PRO-DEV amendment): the winning edit per post. Stored
+ * separately from Post because Post lives in the Kiro-authored types file
+ * and must not change. `editEntryId` is the LWW tie-break key.
+ */
+export const zPostMeta = z.object({
+  editedAt: z.string(),
+  editEntryId: z.string(),
+});
+
+/** Delete-wins tombstone per post (PRO-DEV amendment). */
+export const zTombstone = z.object({
+  deletedAt: z.string(),
+  entryId: z.string(),
+});
+
 export const zBoardsStore = z.object({
   boards: z.array(zBoard),
   threads: z.array(zThread),
+  /** Absent in pre-PRO-DEV files: defaults to empty (no edits, no deletes). */
+  postMeta: z.record(z.string(), zPostMeta).default({}),
+  tombstones: z.record(z.string(), zTombstone).default({}),
 });
 export type BoardsData = z.infer<typeof zBoardsStore>;
 
@@ -105,8 +124,25 @@ export const zHallOfFameEntry = z.object({
   timestamp: z.string(),
 });
 
+/**
+ * A federated Hall of Fame score (PRO-DEV amendment): a local entry plus
+ * its origin node and the log entry id that carried it (dedupe key).
+ * Kept apart from HallOfFameEntry, which lives in the Kiro-authored
+ * types file and must not change.
+ */
+export const zNetworkScore = z.object({
+  handle: z.string(),
+  level: z.number().int(),
+  timestamp: z.string(),
+  originNode: z.string(),
+  entryId: z.string(),
+});
+export type NetworkScore = z.infer<typeof zNetworkScore>;
+
 export const zScoresStore = z.object({
   entries: z.array(zHallOfFameEntry),
+  /** Absent in pre-PRO-DEV files: defaults to empty (standalone node). */
+  network: z.array(zNetworkScore).default([]),
 });
 export type ScoresData = z.infer<typeof zScoresStore>;
 

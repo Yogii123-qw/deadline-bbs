@@ -18,7 +18,21 @@
 import { randomUUID } from 'node:crypto';
 import type { Post, Thread } from '../shared/types.js';
 import type { AtomicStore } from '../boards/store.js';
-import type { SyncEntry, SyncLogData } from './entries.js';
+import type {
+  EditPayload,
+  ScorePayload,
+  SyncEntry,
+  SyncLogData,
+  TombstonePayload,
+} from './entries.js';
+
+/** Payload by entry kind for local appends. */
+export type LocalEntryPayload =
+  | { kind: 'thread'; payload: Thread }
+  | { kind: 'reply'; payload: Post }
+  | { kind: 'edit'; payload: EditPayload }
+  | { kind: 'tombstone'; payload: TombstonePayload }
+  | { kind: 'score'; payload: ScorePayload };
 
 export const EMPTY_SYNC_LOG: SyncLogData = {
   nodeId: '',
@@ -86,31 +100,44 @@ export class SyncLogStore {
   }
 
   /**
-   * Append a locally created post to the log. Returns the entry, or null
-   * when the append failed (disk error): the local post still stands —
-   * local availability beats federation — and the failure is logged.
-   * Never throws.
+   * Mint an entry id without appending. Local edit/delete flows generate
+   * the id first, apply the operation to the board store with it (so a
+   * failed apply leaves nothing in the log), then append with the same
+   * id. Uniqueness comes from origin + UUID, as always.
+   */
+  public createEntryId(): string {
+    return `${this.nodeId()}:${randomUUID()}`;
+  }
+
+  /**
+   * Append a locally created operation to the log. Returns the entry, or
+   * null when the append failed (disk error): the local change still
+   * stands — local availability beats federation — and the failure is
+   * logged. Never throws. `idOverride` reuses an id minted by
+   * createEntryId (edit/delete flows); otherwise a fresh id is minted.
    */
   public async appendLocal(
-    kind: 'thread' | 'reply',
-    payload: Thread | Post,
+    kind: LocalEntryPayload['kind'],
+    payload: Thread | Post | EditPayload | TombstonePayload | ScorePayload,
     at: string,
+    idOverride?: string,
   ): Promise<SyncEntry | null> {
     const origin = this.nodeId();
-    const id = `${origin}:${randomUUID()}`;
+    const id = idOverride ?? `${origin}:${randomUUID()}`;
     let entry: SyncEntry | null = null;
     try {
       await this.store.write((data) => {
-        entry = {
-          id,
-          origin,
-          seq: data.nextSeq,
-          kind,
-          at,
-          ...(kind === 'thread'
-            ? { thread: payload as Thread }
-            : { post: payload as Post }),
-        };
+        const base = { id, origin, seq: data.nextSeq, kind, at };
+        entry =
+          kind === 'thread'
+            ? { ...base, thread: payload as Thread }
+            : kind === 'reply'
+              ? { ...base, post: payload as Post }
+              : kind === 'edit'
+                ? { ...base, edit: payload as EditPayload }
+                : kind === 'tombstone'
+                  ? { ...base, tombstone: payload as TombstonePayload }
+                  : { ...base, score: payload as ScorePayload };
         return {
           ...data,
           nextSeq: data.nextSeq + 1,
@@ -119,7 +146,7 @@ export class SyncLogStore {
       });
     } catch (err) {
       this.onLog(
-        `Sync log append failed (local post still stands): ${err instanceof Error ? err.message : String(err)}`,
+        `Sync log append failed (local change still stands): ${err instanceof Error ? err.message : String(err)}`,
       );
       return null;
     }

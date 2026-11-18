@@ -3,6 +3,18 @@
  *
  * All functions are async and built on AtomicStore. Thread lists are sorted
  * newest-first by most recent post. Read markers advance only forward.
+ *
+ * PRO-DEV amendment: the read boundary filters tombstoned posts. Every
+ * public read (listThreads, getThread, findPost, readData,
+ * getUnreadCounts) returns the display view — tombstoned posts never
+ * appear, and threads with no visible posts never appear in lists.
+ * getThread may return a thread whose posts array is empty (every post
+ * deleted) so a session sitting in the thread can still leave cleanly.
+ * Raw data is only ever touched inside write callbacks and the explicit
+ * findPostRaw marker lookup, so delete-wins and LWW checks always see
+ * the full picture. Edits mutate the stored post in place and record an
+ * overlay entry in postMeta (see src/shared/validation.ts); search, the
+ * API, and unread counts automatically see edited content.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -26,6 +38,46 @@ function lastPostOf(thread: Thread): Post | null {
   return [...thread.posts].sort(comparePosts).at(-1) ?? null;
 }
 
+/** The display view of stored data: tombstoned posts removed. */
+function visibleThreads(data: BoardsData): Thread[] {
+  return data.threads.map((t) => ({
+    ...t,
+    posts: t.posts.filter((p) => data.tombstones[p.id] === undefined),
+  }));
+}
+
+/** Outcome of applying an edit operation (local or federated). */
+export type EditApplyStatus =
+  | 'applied'
+  | 'superseded'
+  | 'tombstoned'
+  | 'unknown-post'
+  | 'forbidden';
+
+/** Outcome of applying a tombstone operation (local or federated). */
+export type TombstoneApplyStatus = 'applied' | 'already' | 'unknown-post' | 'forbidden';
+
+export interface EditOperation {
+  postId: string;
+  threadId: string;
+  boardId: string;
+  authorHandle: string;
+  subject: string;
+  body: string;
+  /** Entry timestamp (ISO 8601): the LWW key, with entryId as tie-break. */
+  at: string;
+  entryId: string;
+}
+
+export interface TombstoneOperation {
+  postId: string;
+  threadId: string;
+  boardId: string;
+  authorHandle: string;
+  at: string;
+  entryId: string;
+}
+
 export class BoardStore {
   private readonly store: AtomicStore<BoardsData>;
 
@@ -33,8 +85,18 @@ export class BoardStore {
     this.store = store;
   }
 
+  /**
+   * The display view: threads with tombstoned posts removed (threads left
+   * empty are dropped), plus the postMeta/tombstones overlays for marker
+   * rendering. Consumers that need raw data (sync apply, marker
+   * resolution) use write callbacks or findPostRaw instead.
+   */
   public async readData(): Promise<BoardsData> {
-    return this.store.read();
+    const data = await this.store.read();
+    return {
+      ...data,
+      threads: visibleThreads(data).filter((t) => t.posts.length > 0),
+    };
   }
 
   public async listBoards(): Promise<Board[]> {
@@ -54,8 +116,8 @@ export class BoardStore {
   public async listThreads(boardId: string): Promise<Thread[]> {
     await this.getBoard(boardId);
     const data = await this.store.read();
-    return data.threads
-      .filter((t) => t.boardId === boardId)
+    return visibleThreads(data)
+      .filter((t) => t.boardId === boardId && t.posts.length > 0)
       .sort((a, b) => {
         const la = lastPostOf(a);
         const lb = lastPostOf(b);
@@ -66,22 +128,49 @@ export class BoardStore {
       });
   }
 
+  /** A thread with tombstoned posts removed; may have an empty posts array. */
   public async getThread(threadId: string): Promise<Thread> {
     const data = await this.store.read();
     const thread = data.threads.find((t) => t.id === threadId);
     if (thread === undefined) {
       throw new ValidationError('Thread not found.');
     }
-    return thread;
+    return {
+      ...thread,
+      posts: thread.posts.filter((p) => data.tombstones[p.id] === undefined),
+    };
   }
 
+  /** A visible post, or null when absent or tombstoned. */
   public async findPost(postId: string): Promise<Post | null> {
+    const data = await this.store.read();
+    if (data.tombstones[postId] !== undefined) return null;
+    for (const thread of data.threads) {
+      const post = thread.posts.find((p) => p.id === postId);
+      if (post !== undefined) return post;
+    }
+    return null;
+  }
+
+  /**
+   * A post regardless of tombstone state, or null when truly absent. Used
+   * ONLY for read-marker resolution: a marker pointing at a deleted post
+   * must still order correctly, or deleting an old post would mark a whole
+   * board unread. Never used to display content.
+   */
+  public async findPostRaw(postId: string): Promise<Post | null> {
     const data = await this.store.read();
     for (const thread of data.threads) {
       const post = thread.posts.find((p) => p.id === postId);
       if (post !== undefined) return post;
     }
     return null;
+  }
+
+  /** The winning edit overlay for a post, or null when never edited. */
+  public async getPostMeta(postId: string): Promise<{ editedAt: string; editEntryId: string } | null> {
+    const data = await this.store.read();
+    return data.postMeta[postId] ?? null;
   }
 
   public async createThread(
@@ -148,8 +237,10 @@ export class BoardStore {
   }
 
   /**
-   * Unread counts per board for a user: posts newer than the user's read
-   * marker for that board. No marker means everything is unread.
+   * Unread counts per board for a user: VISIBLE posts newer than the
+   * user's read marker for that board. The marker resolves against raw
+   * data (see findPostRaw), so a deleted marker post still orders
+   * correctly. No marker means everything visible is unread.
    */
   public async getUnreadCounts(
     readMarkers: Record<string, string>,
@@ -168,6 +259,7 @@ export class BoardStore {
       for (const thread of data.threads) {
         if (thread.boardId !== board.id) continue;
         for (const post of thread.posts) {
+          if (data.tombstones[post.id] !== undefined) continue;
           if (markerPost === null || comparePosts(post, markerPost) > 0) {
             unread += 1;
           }
@@ -186,17 +278,21 @@ export class BoardStore {
   /**
    * Federation import: store a thread received from a peer, verbatim ids.
    * Returns false when a thread with this id already exists (idempotent:
-   * receiving the same entry twice never duplicates). The caller owns
-   * validation and sanitization (see sync/engine.ts). Throws
-   * ValidationError for an unknown board.
+   * receiving the same entry twice never duplicates). Posts already under
+   * a tombstone are filtered out (delete-wins survives even a lost
+   * seen-set); when nothing visible remains, the thread is not stored.
+   * The caller owns validation and sanitization (see sync/engine.ts).
+   * Throws ValidationError for an unknown board.
    */
   public async importThread(thread: Thread): Promise<boolean> {
     await this.getBoard(thread.boardId);
     let inserted = false;
     await this.store.write((data) => {
       if (data.threads.some((t) => t.id === thread.id)) return data;
+      const visible = thread.posts.filter((p) => data.tombstones[p.id] === undefined);
+      if (visible.length === 0) return data;
       inserted = true;
-      return { ...data, threads: [...data.threads, thread] };
+      return { ...data, threads: [...data.threads, { ...thread, posts: visible }] };
     });
     return inserted;
   }
@@ -205,12 +301,20 @@ export class BoardStore {
    * Federation import: store a reply received from a peer, verbatim id,
    * inserted in chronological order (comparePosts) so late or out-of-order
    * arrivals still display in the right place. Returns 'duplicate' when a
-   * post with this id already exists and 'unknown-thread' when the thread
-   * has not arrived yet (the caller queues it as pending).
+   * post with this id already exists, 'suppressed' when the post is under
+   * a tombstone (delete-wins: the add is recorded by the caller but never
+   * displayed), and 'unknown-thread' when the thread has not arrived yet
+   * (the caller queues it as pending).
    */
-  public async importReply(post: Post): Promise<'imported' | 'duplicate' | 'unknown-thread'> {
-    let status: 'imported' | 'duplicate' | 'unknown-thread' = 'unknown-thread';
+  public async importReply(
+    post: Post,
+  ): Promise<'imported' | 'duplicate' | 'suppressed' | 'unknown-thread'> {
+    let status: 'imported' | 'duplicate' | 'suppressed' | 'unknown-thread' = 'unknown-thread';
     await this.store.write((data) => {
+      if (data.tombstones[post.id] !== undefined) {
+        status = 'suppressed';
+        return data;
+      }
       if (data.threads.some((t) => t.posts.some((p) => p.id === post.id))) {
         status = 'duplicate';
         return data;
@@ -227,6 +331,107 @@ export class BoardStore {
             ? { ...t, posts: [...t.posts, post].sort(comparePosts) }
             : t,
         ),
+      };
+    });
+    return status;
+  }
+
+  /**
+   * Apply an edit operation (local or federated — one code path, one set
+   * of rules). Checks run in order: existence, archive, authorship,
+   * tombstone (delete-wins), then LWW over (at, entryId). Idempotent:
+   * re-applying the winning edit returns 'superseded' (equal key).
+   * Editing a thread's first post also updates the thread subject.
+   */
+  public async applyEdit(op: EditOperation): Promise<EditApplyStatus> {
+    let status: EditApplyStatus = 'unknown-post';
+    await this.store.write((data) => {
+      const thread = data.threads.find((t) => t.id === op.threadId);
+      const post = thread?.posts.find((p) => p.id === op.postId);
+      if (thread === undefined || post === undefined) {
+        status = 'unknown-post';
+        return data;
+      }
+      if (post.isArchive) {
+        status = 'forbidden';
+        return data;
+      }
+      if (post.authorHandle.toLowerCase() !== op.authorHandle.toLowerCase()) {
+        status = 'forbidden';
+        return data;
+      }
+      if (data.tombstones[op.postId] !== undefined) {
+        status = 'tombstoned';
+        return data;
+      }
+      const existing = data.postMeta[op.postId];
+      if (
+        existing !== undefined &&
+        (existing.editedAt > op.at ||
+          (existing.editedAt === op.at && existing.editEntryId >= op.entryId))
+      ) {
+        status = 'superseded';
+        return data;
+      }
+      status = 'applied';
+      const sorted = [...thread.posts].sort(comparePosts);
+      const isFirstPost = sorted[0]?.id === op.postId;
+      return {
+        ...data,
+        threads: data.threads.map((t) =>
+          t.id === op.threadId
+            ? {
+                ...t,
+                subject: isFirstPost ? op.subject : t.subject,
+                posts: t.posts.map((p) =>
+                  p.id === op.postId ? { ...p, subject: op.subject, body: op.body } : p,
+                ),
+              }
+            : t,
+        ),
+        postMeta: {
+          ...data.postMeta,
+          [op.postId]: { editedAt: op.at, editEntryId: op.entryId },
+        },
+      };
+    });
+    return status;
+  }
+
+  /**
+   * Apply a tombstone operation (local or federated — one code path).
+   * Checks run in order: existence, archive, authorship, then
+   * idempotence. Once tombstoned, a post never displays again, whatever
+   * arrives later (see importThread/importReply/applyEdit).
+   */
+  public async applyTombstone(op: TombstoneOperation): Promise<TombstoneApplyStatus> {
+    let status: TombstoneApplyStatus = 'unknown-post';
+    await this.store.write((data) => {
+      const thread = data.threads.find((t) => t.id === op.threadId);
+      const post = thread?.posts.find((p) => p.id === op.postId);
+      if (thread === undefined || post === undefined) {
+        status = 'unknown-post';
+        return data;
+      }
+      if (post.isArchive) {
+        status = 'forbidden';
+        return data;
+      }
+      if (post.authorHandle.toLowerCase() !== op.authorHandle.toLowerCase()) {
+        status = 'forbidden';
+        return data;
+      }
+      if (data.tombstones[op.postId] !== undefined) {
+        status = 'already';
+        return data;
+      }
+      status = 'applied';
+      return {
+        ...data,
+        tombstones: {
+          ...data.tombstones,
+          [op.postId]: { deletedAt: op.at, entryId: op.entryId },
+        },
       };
     });
     return status;

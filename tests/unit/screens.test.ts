@@ -3,6 +3,7 @@ import { stripAnsi } from '../../src/telnet/ansi.js';
 import {
   catacombScreen,
   combatScreen,
+  composeScreen,
   filePager,
   formatElapsed,
   hallOfFameScreen,
@@ -169,5 +170,101 @@ describe('screens', () => {
     expect(formatElapsed('2026-11-19T12:00:00.000Z', new Date('2026-11-19T12:00:09.000Z'))).toBe(
       '0:00:09',
     );
+  });
+});
+
+describe('PRO-DEV screen additions', () => {
+  it('thread view numbers posts globally and marks edits', () => {
+    const thread = seedBoardsData().threads[0];
+    const plain = stripAnsi(
+      threadViewScreen(thread, 0, 80, { [thread.posts[0].id]: '2026-11-19T12:00:00.000Z' }),
+    );
+    expect(plain).toContain('#1');
+    expect(plain).toContain('#2');
+    expect(plain).toContain('[edited 2026-11-19]');
+    expect(plain).toContain('E<n>: edit your post');
+    expect(plain).toContain('D<n>: delete your post');
+  });
+
+  it('thread view numbers continue across pages', () => {
+    const thread = seedBoardsData().threads[0];
+    const many = {
+      ...thread,
+      posts: Array.from({ length: 7 }, (_, i) => ({
+        ...thread.posts[0],
+        id: `p${i}`,
+        body: `body ${i + 1}`,
+      })),
+    };
+    const page2 = stripAnsi(threadViewScreen(many, 1, 80));
+    expect(page2).toContain('#6');
+    expect(page2).toContain('#7');
+    expect(page2).toContain('Page 2/2');
+  });
+
+  it('thread view explains an emptied thread', () => {
+    const thread = seedBoardsData().threads[0];
+    const plain = stripAnsi(threadViewScreen({ ...thread, posts: [] }, 0));
+    expect(plain).toContain('no posts to show');
+  });
+
+  it('hall of fame shows the network section only when scores exist', () => {
+    const localOnly = stripAnsi(
+      hallOfFameScreen([{ handle: 'Alice', level: 6, timestamp: '2026-11-19T00:00:00.000Z' }]),
+    );
+    expect(localOnly).not.toContain('THE NETWORK');
+    expect(localOnly).not.toContain('THIS NODE');
+    const withNetwork = stripAnsi(
+      hallOfFameScreen(
+        [{ handle: 'Alice', level: 6, timestamp: '2026-11-19T00:00:00.000Z' }],
+        80,
+        [
+          {
+            handle: 'Bob',
+            level: 9,
+            timestamp: '2026-11-19T00:00:00.000Z',
+            originNode: 'node-b',
+            entryId: 'node-b:1',
+          },
+        ],
+      ),
+    );
+    expect(withNetwork).toContain('THIS NODE');
+    expect(withNetwork).toContain('THE NETWORK');
+    expect(withNetwork).toContain('Bob');
+    expect(withNetwork).toContain('node node-b');
+    const networkOnly = stripAnsi(
+      hallOfFameScreen(
+        [],
+        80,
+        [
+          {
+            handle: 'Bob',
+            level: 9,
+            timestamp: '2026-11-19T00:00:00.000Z',
+            originNode: 'node-b',
+            entryId: 'node-b:1',
+          },
+        ],
+      ),
+    );
+    expect(networkOnly).not.toContain('empty');
+    expect(networkOnly).toContain('THE NETWORK');
+  });
+
+  it('main menu lists node status', () => {
+    const plain = stripAnsi(mainMenu('Alice', '0:01:00'));
+    expect(plain).toContain('7');
+    expect(plain).toContain('Node Status');
+  });
+
+  it('compose screen distinguishes edit mode from new posts', () => {
+    const post = stripAnsi(composeScreen('Subject:'));
+    expect(post).toContain('COMPOSE');
+    expect(post).toContain('without posting');
+    const edit = stripAnsi(composeScreen('New subject (Enter keeps the current one):', 80, true));
+    expect(edit).toContain('EDIT POST');
+    expect(edit).not.toContain('COMPOSE');
+    expect(edit).toContain('without saving');
   });
 });

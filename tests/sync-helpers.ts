@@ -13,6 +13,7 @@ import { startHttpServer } from '../src/server/http.js';
 import { startTelnetServer, type RunningServer } from '../src/server/telnet.js';
 import { createWsBridge } from '../src/server/ws-bridge.js';
 import { createApiHandler } from '../src/sync/api.js';
+import { createArchiveHandler } from '../src/server/archive.js';
 import { SyncEngine } from '../src/sync/engine.js';
 import { zSyncLogData, type SyncLogData } from '../src/sync/entries.js';
 import { EMPTY_SYNC_LOG, SyncLogStore } from '../src/sync/store.js';
@@ -49,6 +50,7 @@ export async function attachSync(
     secret: opts?.secret,
     intervalMs: opts?.intervalMs ?? 0,
     hub,
+    scores: env.deps.scores,
     onLog: (m) => env.logs.push(m),
   });
   syncLog.onLocalAppend = () => {
@@ -56,6 +58,7 @@ export async function attachSync(
   };
   env.deps.live = hub;
   env.deps.syncLog = syncLog;
+  env.deps.syncStats = () => engine.getStats();
   return { hub, syncLog, engine, nodeId: resolved };
 }
 
@@ -112,6 +115,7 @@ export async function bootNode(opts: {
       });
     },
     onApi: apiHandler,
+    onArchive: createArchiveHandler({ boards: env.deps.boards, nodeId: attached.nodeId }),
   });
   const telnet = await startTelnetServer({ port: 0, deps: env.deps });
   if (opts.autoStart === true) attached.engine.start();

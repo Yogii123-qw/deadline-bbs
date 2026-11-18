@@ -38,23 +38,35 @@ never shared a moment. DeadLine does what that hardware could not:
 - **Live broadcast:** when a caller posts a thread or reply, every
   other connected session — telnet and web — sees it inline,
   immediately. When someone slays the Crypt Lord, the whole board
-  hears about it.
+  hears about it. Edits and deletions broadcast the same way, marked
+  as edits/deletions.
 - **Live presence:** callers see each other arrive and hang up, and
   who's online reflects the real, current sessions.
 - **Live chat:** `6 <handle> <message>` sends a private message to a
   caller who is online right now, across transports (telnet ↔ web).
   Bare `6` shows who is online and the syntax.
-- **Delivery that respects your typing:** a live notice clears the
-  current line, prints, then redraws your prompt plus whatever you had
-  already typed. Your input buffer is never touched — verified by tests
-  that type half a command, receive a notice, and finish it.
+- **Delivery that respects your typing:** a live notice clears every
+  line your partial input occupies — the frame is width-aware, so a
+  wrapped input leaves no fragments — prints the notice, then
+  redraws your prompt plus whatever you had already typed. Your
+  input buffer is never touched — verified by frame-level tests and
+  by a narrow-width headless screenshot of a notice landing
+  mid-typing.
 
 **3. Federation.** FidoNet, reborn on the modern internet — without the
 1990s machinery of mailers, tossers, and nodelists:
 
-- Each node keeps an **append-only log** (`sync.json`) of its posts.
-  Every entry has a globally unique id (`<node-id>:<uuid>`) and is
-  immutable: no edit/delete in v1.
+- Each node keeps an **append-only log** (`sync.json`) of five entry
+  kinds: `thread`, `reply`, `edit`, `tombstone`, and `score`. Every
+  entry has a globally unique id (`<node-id>:<uuid>`). Entries are
+  operations with CRDT-style semantics: adds are idempotent,
+  edits are last-writer-wins, tombstones win over late adds and
+  edits (delete-wins), and scores form a grow-only set — so any two
+  replicas that have received the same entries converge to the same
+  boards, regardless of delivery order. Proven by convergence tests
+  that deliver entries in shuffled and duplicated order. An edit or
+  tombstone that arrives before the post it refers to waits in a
+  pending queue and applies automatically when the post arrives.
 - Nodes exchange logs over **`POST /sync/exchange`**. One round trip
   converges both ways. Exchange is **idempotent** (receiving an entry
   twice never duplicates a post) and **loop-free** (discrete rounds
@@ -67,10 +79,19 @@ never shared a moment. DeadLine does what that hardware could not:
 - A **read-only JSON API** (`/api/boards`, `/api/boards/:id/threads`,
   `/api/threads/:id`, `/api/status`) exposes the same data the terminal
   shows, and a public **SSE stream** (`/api/events`) carries live
-  post/victory/presence events. Chat messages never enter the public
-  stream.
+  post/victory/presence/edit events. Chat messages never enter the
+  public stream.
 - When a federated post arrives, local callers see it live, marked
   with its origin node: `(via node …)`.
+- **Federated Hall of Fame:** a Crypt Lord victory appends a `score`
+  entry to the same log, so victories travel with the boards. The Hall
+  of Fame shows THIS NODE and THE NETWORK sections, each score
+  attributed to its origin node. Scores enter the log only through
+  the victory path — there is no other way to record one.
+- **Node Status** (menu item `7`) shows the live federation state of
+  the node you called: node id, peers, log entries, pending queue,
+  last sync round, and whether the sync secret is set — real numbers
+  from the sync engine, not static text.
 
 ## Quick start
 
@@ -127,31 +148,49 @@ networks. A shared secret is a bearer secret, not per-node identity; no
 stronger security claim is made. The server prints a warning at startup
 when no secret is set.
 
-**Federation v1 limits (honest):** no edit/delete sync; no synchronized
-moderation (an operator's local deletion does not propagate — choose
-your peers); no compatibility with FidoNet/FTN or ActivityPub (this
-protocol is DeadLine's own HTTP/JSON log exchange, and cannot exchange
-messages with existing FidoNet or fediverse networks); full-log exchange
-per round, suited to community scale, not millions of posts; the 1994
-archive seeds never federate (each node's archive is local lore);
-accounts, read markers, game characters, presence, and chat stay
-per-node (the same handle on two nodes is two different people, and a
-post's origin node is shown, not a verified cross-node identity).
+**Federation limits (honest):** no synchronized moderation (an
+operator's local deletion does not propagate — choose your peers); no
+compatibility with FidoNet/FTN or ActivityPub (this protocol is
+DeadLine's own HTTP/JSON log exchange, and cannot exchange messages
+with existing FidoNet or fediverse networks); full-log exchange per
+round, suited to community scale, not millions of posts; edit conflicts
+resolve by the origin node's wall clock (last-writer-wins), so skewed
+clocks can order two near-simultaneous edits unexpectedly — the result
+is still deterministic and identical on every node; federated scores
+trust the peer set exactly as posts do — a malicious peer holding the
+shared secret could forge scores, so scores are display-only reputation
+with nothing at stake; the 1994 archive seeds never federate (each
+node's archive is local lore); accounts, read markers, game characters,
+presence, and chat stay per-node (the same handle on two nodes is two
+different people, and a post's origin node is shown, not a verified
+cross-node identity). Edit/delete sync, formerly listed here, was
+closed on 19 November 2026 (see above).
 
 ## What you can do on the board
 
-- **Handles** — register and log in with a passcode. Passcodes are stored
-  as salted SHA-256 hashes, never in plain text. Passcode entry echoes
-  `*` on both transports. (Single-round SHA-256 is weaker than the
-  PBKDF2 used by Mystic and ENiGMA½ — stated plainly in the competitive
-  position below.)
+- **Handles** — register and log in with a passcode. Passcodes are
+  stored as PBKDF2-HMAC-SHA256 hashes (600,000 iterations, the OWASP
+  minimum; 128-bit per-account salt), never in plain text. Passcode
+  entry echoes `*` on both transports. Accounts created under the
+  original single-round SHA-256 scheme migrate to PBKDF2
+  automatically on their next successful login — no account is ever
+  locked out by the upgrade.
 - **Message boards** — four boards, threads and replies, per-user read
   markers with unread counts, full-text search across all boards. Posts
   are persisted atomically (temp file + rename, serialized write queue),
-  so concurrent callers cannot corrupt each other's posts.
+  so concurrent callers cannot corrupt each other's posts. Authors can
+  edit (`E<n>`) and delete (`D<n>`, confirmed by typing `DELETE`) their
+  own posts; edits show an `[edited <date>]` marker and both propagate
+  to peers through the federation log. The 1994 archive posts are
+  immutable — they cannot be edited or deleted.
 - **CATACOMB** — a door game: a turn-based dungeon crawl with 20 turns a
   day, a persistent character, leveling, five depths, and a Hall of Fame.
-  Defeat the Crypt Lord on depth 5 to win.
+  Defeat the Crypt Lord on depth 5 to win. Victories federate: the Hall
+  of Fame shows your node's slayers and the network's, attributed per
+  node.
+- **Public archive** — `/archive` renders the same boards as a
+  read-only web page, no login required, no write path, in the same
+  phosphor vernacular. It shows exactly what the JSON API returns.
 - **File area** — browse and read text files inline; from the web client
   you can also download them over HTTP. (From telnet, the board tells you
   the web address for downloads — a raw telnet session has no download
@@ -194,9 +233,12 @@ Discourse is a heavy web-only forum; Mastodon is federated
 microblogging with a heavy stack and no terminal.
 
 **Where DeadLine loses, honestly:** no voice, video, or images; no
-native mobile app; no message editing, deletion, or synchronized
-moderation; no email, NNTP, Gopher, or door ecosystem; passcode hashing
-is single-round salted SHA-256, not PBKDF2; the federation protocol is
+native mobile app; ~~no message editing, deletion~~ (closed 19 Nov
+2026: authors edit/delete their own posts, synced via the federation
+log); no synchronized moderation; no email, NNTP, Gopher, or door
+ecosystem; ~~passcode hashing is single-round salted SHA-256, not
+PBKDF2~~ (closed 19 Nov 2026: PBKDF2-HMAC-SHA256, 600,000 iterations,
+with automatic migration of legacy hashes); the federation protocol is
 not compatible with FTN or ActivityPub, so it cannot interoperate with
 existing networks; and it is 30 years younger than its BBS competitors,
 with no community yet. Every claim in this section maps to a feature
@@ -218,14 +260,15 @@ read 19 November 2026.
   never federate.
 - **The `N` key.** In a thread list, `N` always means "new thread".
   Pagination uses `>` and `<`. The screen footer says so on every page.
-- **Live display limit.** A live notice clears one terminal line. If
-  your partial input wrapped onto several lines, fragments above the
-  last line may remain visible until the next screen render. Your input
-  buffer is always intact.
+- **Live display limit — fixed 19 Nov 2026.** A live notice used to
+  clear one terminal line, leaving fragments when partial input had
+  wrapped. The frame is now width-aware: it clears every line the
+  input occupies before printing the notice. Proven by frame-level
+  tests and a narrow-width headless screenshot; your input buffer was
+  always intact.
 - **What is not here.** No XMODEM, no SSH transport, no FidoNet/FTN
-  compatibility, no message editing or deletion, no synchronized
-  moderation. Those are real capabilities that deserve real
-  implementations, not stubs.
+  compatibility, no synchronized moderation. Those are real
+  capabilities that deserve real implementations, not stubs.
 - **What was not live-verified.** A standalone telnet client app
   (verified over raw TCP, not PuTTY/macOS Terminal); a physical phone
   keyboard (verified with a mobile-viewport headless browser). See
@@ -235,8 +278,8 @@ read 19 November 2026.
 
 ```
 src/
-  server/     HTTP + static + downloads, telnet server, WebSocket bridge,
-              live event hub
+  server/     HTTP + static + downloads + public archive, telnet server,
+              WebSocket bridge, live event hub
   session/    the one engine: state machine, screens, line reader
   sync/       federation: append-only log entries/store/engine, sync
               endpoint, read-only JSON API, SSE stream
@@ -247,8 +290,9 @@ src/
   shared/     types, Zod validation, error classes
 web/          xterm.js CRT client (Vite)
 files/        the file area's downloadable text files
-tests/        285 tests: unit, game, real-socket live + federation
-              integration, JSON API + SSE
+tests/        351 tests: unit, game, CRDT convergence, real-socket live
+              + federation + edit/delete integration, JSON API + SSE,
+              public archive HTTP
 ```
 
 The session engine is transport-agnostic: `processInput({state, input,
@@ -275,8 +319,11 @@ Kiro (via `kiro-cli`, its native interface) generated the entire
 CATACOMB game module, its 65 tests, and the shared types file. The rest
 of the code, the tests, and this README were written directly by the
 builder. The LIVE BOARD and FEDERATION layers were written entirely by
-the builder with zero Kiro calls. The full, honest log — every Kiro
-call, what each one produced, and what the builder wrote — is in
+the builder with zero Kiro calls, as was the PRO-DEV round of 19
+November 2026 (PBKDF2, edit/delete sync, federated Hall of Fame, public
+archive, Node Status, accessibility pass), which left every Kiro
+artifact untouched. The full, honest log — every Kiro call, what each
+one produced, and what the builder wrote — is in
 [`KIRO-USAGE.md`](KIRO-USAGE.md).
 
 ## License
