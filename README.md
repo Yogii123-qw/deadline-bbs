@@ -163,9 +163,12 @@ post's origin node is shown, not a verified cross-node identity).
 ## Competitive position (researched 19 November 2026)
 
 Facts below were checked against the projects' official sources on 19
-November 2026. DeadLine does not claim to be the first federated BBS —
-federation exists in mature BBS software, and so does multinode chat.
-The claim is the *combination*, in one zero-config package.
+November 2026. Sources: Synchronet — <https://www.synchro.net/>; Mystic
+BBS — <https://www.mysticbbs.com/features.html>; ENiGMA½ —
+<https://github.com/NuSkooler/enigma-bbs>. DeadLine does not claim to be
+the first federated BBS — federation exists in mature BBS software, and
+so does multinode chat. The claim is the *combination*, in one
+zero-config package.
 
 | | Self-host | Federation | Terminal access | Browser, no install | Zero-config start | No third-party account |
 |---|---|---|---|---|---|---|
