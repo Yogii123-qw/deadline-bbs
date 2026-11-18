@@ -1,0 +1,32 @@
+WELCOME TO DEADLINE BBS
+=======================
+
+You have reached a working bulletin board system, the way boards
+worked from 1978 to 1995: one call at a time, text only, no feeds,
+no likes, no algorithm. Just people, messages, and a door game.
+
+HOW TO USE THIS BOARD
+----------------------
+- At any menu, type the number or letter shown and press Enter.
+- A new handle registers on the spot. Pick a passcode you will
+  remember; there is no "forgot password" here, only the sysop.
+- Message Boards: read threads, post, reply, search all boards
+  with / from the board list.
+- File Area: read these files inline, or download them from the
+  web interface with D and the file number.
+- CATACOMB: the door game. You get 20 turns a day. The Crypt
+  Lord waits at depth 5. The Hall of Fame remembers winners.
+- Who's Online shows the other callers sharing the board right
+  now, on telnet and on the web alike.
+
+HOUSE RULES (1994, STILL TRUE)
+------------------------------
+1. Be kind. The person on the other end paid long-distance rates.
+2. No ANSI bombs in messages. The board strips them anyway.
+3. Log off when you are done. The next caller is waiting.
+
+This board is a resurrection, built for Kiroween 2026. Everything
+here really works: the telnet port speaks real RFC 854, the
+messages really persist, and the game really keeps score.
+
+  -- SYSOP

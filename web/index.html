@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>DeadLine BBS — The bulletin board system that refuses to die</title>
+  <meta name="description" content="A real multi-node bulletin board system, revived: message boards, a door game, and a file area over telnet and the web. No account needed.">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="crt">
+    <header class="topbar">
+      <div class="brand">DEADLINE <span>BBS</span></div>
+      <div class="status">
+        <span id="status-dot" class="dot" aria-hidden="true"></span>
+        <span id="status-text">CONNECTING</span>
+        <button id="reconnect" type="button" hidden>Reconnect</button>
+      </div>
+    </header>
+    <main id="terminal-wrap">
+      <div id="terminal"></div>
+      <div class="scanlines" aria-hidden="true"></div>
+    </main>
+    <footer class="hintbar">
+      <span>Type to talk to the board. A new handle registers on the spot.</span>
+      <span class="telnet-hint">Also on telnet: <code id="telnet-cmd">telnet localhost 2323</code></span>
+    </footer>
+  </div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

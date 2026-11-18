@@ -1,0 +1,44 @@
+CATACOMB — GAME MANUAL
+======================
+
+You are standing at the mouth of a dungeon that has been waiting
+since 1994. Five levels down. Something old lives at the bottom.
+
+TURNS
+-----
+You get 20 turns per day. Every action costs one turn: exploring,
+descending, resting. Turns reset at midnight, server time. When
+you are out of turns, the dungeon closes until tomorrow.
+
+ACTIONS
+-------
+E — Explore the current level. You may find gold, or something
+    with teeth. 6 in 10 explores end in a fight.
+D — Descend to the next level. Monsters get stronger the deeper
+    you go. The Crypt Lord waits at depth 5.
+R — Rest. Recover a third of your maximum health. Safe, but the
+    turn is still spent.
+S — Show your status again.
+Q — Leave the dungeon. Your character is saved exactly as-is.
+
+COMBAT
+------
+Fights are turn-based. You strike first. Damage is your attack
+minus the monster's defense, plus a little luck. If the monster
+survives, it strikes back. Defeated monsters drop experience and
+gold. Level up and you grow tougher: more health, more attack,
+more defense, fully healed.
+
+A — Attack.   F — Flee (free, no shame in it).
+
+DEATH AND VICTORY
+-----------------
+If your health reaches zero, you die. Your character restarts
+from level 1 — but the turns you already spent today stay spent.
+Deaths are not recorded anywhere.
+
+Defeat the Crypt Lord at depth 5 and your name enters the Hall
+of Fame forever, with your final level and the date.
+
+The dungeon is fair: every number it uses is fixed by the rules
+above, and the only luck is the die roll in each combat round.

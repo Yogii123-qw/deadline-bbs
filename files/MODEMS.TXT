@@ -1,0 +1,37 @@
+MODEMS, BAUD, AND THE ART OF THE BUSY SIGNAL
+=============================================
+
+WHAT "BAUD" MEANT
+-----------------
+Early callers connected at 300 baud: about 30 characters per
+second. You could watch the text arrive. By 1994, a 14.4k modem
+moved roughly 1,440 characters per second, and a 28.8k modem
+was the dream machine. A 1MB file at 2400 baud took about an
+hour. At 14.4k, about ten minutes. People planned downloads
+around phone bills.
+
+THE HANDSHAKE
+-------------
+Dialing a BBS sounded like two robots arguing: dial tone, rings,
+then the screech of negotiation as the modems agreed on a speed
+and an error-correction protocol. Veterans could tell the connect
+speed by ear. A 14.4 handshake sounded different from a 2400 one,
+and everyone had opinions about which was prettier.
+
+AT COMMANDS (THE ONES EVERYONE KNEW)
+-------------------------------------
+AT          Say hello to the modem. It answers OK.
+ATDT5551212 Dial the number (tone dialing).
+ATH         Hang up.
+ATZ         Reset the modem to defaults.
+ATS0=1      Answer on the first ring (sysop mode).
+
+WHY IT MATTERED
+---------------
+One phone line meant one caller. If someone was online, you got
+a busy signal and tried again. Scarcity made every call feel
+like an event — and made sysops the most patient people alive.
+
+DeadLine BBS keeps the rituals and drops the busy signal: the
+telnet port answers every caller, and the web terminal answers
+the rest. The patience is still yours to bring.

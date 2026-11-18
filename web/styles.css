@@ -1,0 +1,223 @@
+/* DeadLine BBS web shell. The subject is a CRT terminal, so the shell is
+   a bezel around one: amber phosphor, scanlines, nothing else. No cards,
+   no hero, no decoration that is not the machine itself. */
+
+:root {
+  --phosphor: #ffb000;
+  --phosphor-dim: #8a6d2f;
+  --phosphor-faint: #5c4a22;
+  --crt-bg: #0d0a04;
+  --bezel: #050403;
+  --bezel-edge: #2a1f0d;
+  --ink: #e8dcc0;
+  --danger: #ff5a4e;
+  --ok: #8fbf5f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bezel);
+  color: var(--ink);
+  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(255, 176, 0, 0.32);
+  color: #fff3d6;
+}
+
+.crt {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 1080px;
+  margin: 0 auto;
+  border-left: 1px solid var(--bezel-edge);
+  border-right: 1px solid var(--bezel-edge);
+  background: var(--crt-bg);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bezel-edge);
+  color: var(--phosphor);
+  flex: 0 0 auto;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.brand span {
+  color: var(--phosphor-dim);
+  font-weight: 400;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--phosphor-dim);
+  white-space: nowrap;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--phosphor-dim);
+  flex: 0 0 auto;
+}
+
+.dot.on {
+  background: var(--ok);
+  box-shadow: 0 0 6px rgba(143, 191, 95, 0.8);
+}
+
+.dot.off {
+  background: var(--danger);
+  box-shadow: 0 0 6px rgba(255, 90, 78, 0.8);
+}
+
+#reconnect {
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--phosphor);
+  background: transparent;
+  border: 1px solid var(--phosphor-faint);
+  border-radius: 3px;
+  min-height: 44px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+#reconnect:hover {
+  border-color: var(--phosphor);
+}
+
+#reconnect:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}
+
+#terminal-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--crt-bg);
+}
+
+#terminal {
+  position: absolute;
+  inset: 0;
+  padding: 12px;
+}
+
+#terminal .xterm-viewport {
+  background: transparent !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--phosphor-faint) transparent;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--phosphor-faint);
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.16) 0,
+      rgba(0, 0, 0, 0.16) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+}
+
+.hintbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  border-top: 1px solid var(--bezel-edge);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--phosphor-dim);
+  flex: 0 0 auto;
+}
+
+.hintbar code {
+  color: var(--phosphor);
+  font: inherit;
+}
+
+@media (max-width: 720px) {
+  .crt {
+    border-left: none;
+    border-right: none;
+  }
+
+  .topbar {
+    padding: 8px 10px;
+  }
+
+  .brand {
+    font-size: 14px;
+  }
+
+  #terminal {
+    padding: 8px;
+  }
+
+  .hintbar {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+
+  .telnet-hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
