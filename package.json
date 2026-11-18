@@ -1,1 +1,30 @@
-{"dependencies":{"@xterm/addon-fit":"0.11.0","@xterm/xterm":"6.0.0","ws":"8.23.0","zod":"4.6.7"},"description":"DeadLine BBS — the bulletin board system that refuses to die. A real multi-node BBS over Telnet and WebSocket, built with Kiro for Kiroween 2026 (Resurrection).","devDependencies":{"@types/node":"26.6.6","@types/ws":"8.18.2","typescript":"7.0.2","vite":"8.3.8","vitest":"5.1.1"},"engines":{"node":">=22"},"license":"Apache-2.0","name":"deadline-bbs","scripts":{"build":"tsc -p tsconfig.build.json && vite build","check":"tsc -p tsconfig.json && tsc -p tsconfig.web.json","start":"node dist/server/main.js","test":"vitest run","verify":"npm run check && npm run test && npm run build"},"type":"module","version":"1.0.0"}
+{
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "ws": "8.23.0",
+    "zod": "4.6.7"
+  },
+  "description": "DeadLine BBS — the bulletin board system that refuses to die. A real multi-node BBS over Telnet and WebSocket, built with Kiro for Kiroween 2026 (Resurrection).",
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/ws": "8.18.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0",
+  "name": "deadline-bbs",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && vite build",
+    "check": "tsc -p tsconfig.json && tsc -p tsconfig.web.json",
+    "start": "npm run build && node dist/server/main.js",
+    "test": "vitest run",
+    "verify": "npm run check && npm run test && npm run build"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}
