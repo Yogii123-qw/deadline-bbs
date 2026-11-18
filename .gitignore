@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+*.log
+.DS_Store
+
+# NOTE (Kiroween rules): the .kiro directory MUST be committed and MUST
+# NEVER be added to this file. Do not add .kiro or any sub-folder here.
