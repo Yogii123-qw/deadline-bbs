@@ -157,7 +157,7 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
 - [x] Apache-2.0 license; public on GitHub since 19 Nov 2026; no `.env`; no secrets
 - [x] Demo video upload (< 3 min, public YouTube): **DONE 19 Nov 2026, https://youtu.be/IhImj3ZT95U (v5, 173 s, public, verified live 19 Nov 14:31 WIB)**
 - [ ] Public hosting: **needs Monch's decision**
-- [ ] Devpost submission: **unblocked, account restored 19 Nov 2026**
+- [x] Devpost submission: **DONE 19 Nov 2026, https://devpost.com/software/deadline-bbs-the-bulletin-board-system-that-refuses-to-die (ID 1312006, account brunosrna44 / Yogi Apriyanto, category Resurrection; editable until 4 Dec 2026 17:00 EST)**
 
 ## What was NOT live-verified (honest gaps)
 
@@ -186,7 +186,7 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
 1. **Public push** of this repo: **done 19 Nov 2026** (public on GitHub).
 2. **Hosting** for the demo link.
 3. **Demo video** under 3 minutes on public YouTube: **DONE 19 Nov 2026, https://youtu.be/IhImj3ZT95U (v5, 173 s, public, verified live 19 Nov 14:31 WIB)**.
-4. **Devpost submit** before Sat 5 Dec 2026 05:00 WIB. The account was restored 19 Nov 2026 (Devpost Support removed the flag; confirmed by the owner), so submission is unblocked.
+4. **Devpost submit** before Sat 5 Dec 2026 05:00 WIB: **DONE 19 Nov 2026, https://devpost.com/software/deadline-bbs-the-bulletin-board-system-that-refuses-to-die (ID 1312006; editable until 4 Dec 2026 17:00 EST)**.
 5. **Kiro credits**: Monch handles the 4,000-credit request himself
    (his decision); request deadline Wed 2 Dec 2026 03:00 WIB.
 6. **If he wins:** Required Forms / W-8BEN per the official rules.
