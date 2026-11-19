@@ -103,7 +103,7 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
    (ports 8081/8082, telnet 2324/2325): post on one, read it on the
    other.
 
-**Demo video:** (to be recorded, shot list and narration outline in
+**Demo video:** recorded (v3, 172.93 s, 8 shots; file in the audit folder, upload to YouTube still pending; shot list and narration outline in
 `docs/DEMO-SCRIPT.md`; must be under 3 minutes, public on YouTube.)
 
 ## Evidence checklist (all verified mechanically by the builder)
@@ -154,10 +154,10 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
       shared types shows zero changed lines; zero `kiro-cli` calls for
       the new layers and the PRO-DEV round
 - [x] `/.kiro` at the repo root, tracked by git, NOT gitignored
-- [x] Apache-2.0 license; no remote; no `.env`; no secrets
-- [ ] Demo video (< 3 min, public YouTube): **needs Monch**
+- [x] Apache-2.0 license; public on GitHub since 19 Nov 2026; no `.env`; no secrets
+- [ ] Demo video upload (< 3 min, public YouTube): **recorded (v3), upload needs Monch**
 - [ ] Public hosting: **needs Monch's decision**
-- [ ] Devpost submission: **blocked by the account suspension**
+- [ ] Devpost submission: **unblocked, account restored 19 Nov 2026**
 
 ## What was NOT live-verified (honest gaps)
 
@@ -183,11 +183,10 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
 
 ## Monch gates, in order
 
-1. **Public push** of this repo (currently local-only, no remote).
+1. **Public push** of this repo: **done 19 Nov 2026** (public on GitHub).
 2. **Hosting** for the demo link.
-3. **Demo video** under 3 minutes on public YouTube.
-4. **Devpost submit** before Sat 5 Dec 2026 05:00 WIB, currently
-   BLOCKED by the Devpost account suspension; the appeal is with Devpost.
+3. **Demo video** under 3 minutes on public YouTube: **recorded (v3), upload needs Monch**.
+4. **Devpost submit** before Sat 5 Dec 2026 05:00 WIB. The account was restored 19 Nov 2026 (Devpost Support removed the flag; confirmed by the owner), so submission is unblocked.
 5. **Kiro credits**: Monch handles the 4,000-credit request himself
    (his decision); request deadline Wed 2 Dec 2026 03:00 WIB.
 6. **If he wins:** Required Forms / W-8BEN per the official rules.
