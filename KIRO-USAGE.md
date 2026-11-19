@@ -1,4 +1,4 @@
-# KIRO-USAGE.md — Honest log of Kiro usage
+# KIRO-USAGE.md: Honest log of Kiro usage
 
 **Written by the builder (not by Kiro).** Every `kiro-cli` invocation
 made during this build, what each one produced, and what the builder
@@ -25,7 +25,7 @@ and every file listed below was verified on disk after each call.
 
 ## Call log
 
-### K1 — Steering files (FAILED, transient, partial output kept)
+### K1: Steering files (FAILED, transient, partial output kept)
 
 - Prompt: create `.kiro/steering/product.md`, `tech.md`,
   `structure.md`, `conventions.md` for DeadLine BBS, with
@@ -37,7 +37,7 @@ and every file listed below was verified on disk after each call.
 - Files touched by Kiro: `.kiro/steering/product.md`,
   `.kiro/steering/tech.md` (partial).
 
-### K1b — Steering completion (success)
+### K1b: Steering completion (success)
 
 - Prompt: finish `tech.md` by appending the missing sections, then
   create `structure.md` and `conventions.md` to the same standard.
@@ -49,7 +49,7 @@ and every file listed below was verified on disk after each call.
 - Files touched by Kiro: `.kiro/steering/tech.md` (completed),
   `.kiro/steering/structure.md`, `.kiro/steering/conventions.md`.
 
-### K2 — Feature spec (success, spec mode)
+### K2: Feature spec (success, spec mode)
 
 - Prompt: generate a Quick Spec for the `deadline-bbs` feature
   (requirements, design, tasks), run with `--mode spec`.
@@ -66,9 +66,9 @@ and every file listed below was verified on disk after each call.
   the engine code and the commit message. The spec file itself was not
   edited.
 
-### K3 — Hooks (success)
+### K3: Hooks (success)
 
-- Prompt: create `.kiro/hooks/` automation — a Stop hook running
+- Prompt: create `.kiro/hooks/` automation, a Stop hook running
   `npm run verify` and a PostFileSave hook running `npm run check` on
   `src/` and `web/` TypeScript files.
 - Result: exit 0 after ~47s.
@@ -81,7 +81,7 @@ and every file listed below was verified on disk after each call.
   The files are valid and reference real scripts, but this log does not
   claim the hooks were seen firing.
 
-### K4 — CATACOMB game module (success, with a scope deviation)
+### K4: CATACOMB game module (success, with a scope deviation)
 
 - Prompt: implement `src/game/catacomb.ts` to an exact API (constants,
   damage/level-up/monster formulas, purity rules, injectable RNG) plus
@@ -100,22 +100,22 @@ and every file listed below was verified on disk after each call.
 - Files touched by Kiro: `src/game/catacomb.ts`,
   `tests/game/catacomb.test.ts`, `src/shared/types.ts` (unprompted).
 
-### K5/K6 — reserve, unspent
+### K5/K6: reserve, unspent
 
 No further Kiro calls were needed. All render fixes found during the
 headless walkthrough were in builder-owned code (screens, CSS,
 transports) and were fixed directly by the builder.
 
-## Addendum — 19 November 2026: LIVE BOARD + FEDERATION layers (builder-written, zero Kiro calls)
+## Addendum, 19 November 2026: LIVE BOARD + FEDERATION layers (builder-written, zero Kiro calls)
 
 After the initial build was verified, the entry was extended with two
 new layers, both written directly by the builder:
 
-- **LIVE BOARD** — live broadcast of posts/replies and CATACOMB
+- **LIVE BOARD**: live broadcast of posts/replies and CATACOMB
   victories to all connected sessions, live presence (join/leave),
   and live caller-to-caller chat across transports, with delivery
   that redraws the prompt and preserves partial input.
-- **FEDERATION** — nodes sync message boards over HTTP via an
+- **FEDERATION**: nodes sync message boards over HTTP via an
   append-only log (`sync.json`), with an idempotent, loop-free
   exchange, store-and-forward, a read-only JSON API, and a public
   SSE event stream.
@@ -134,7 +134,7 @@ repo). The new layers were verified by the builder: 285/285 tests pass
 integration tests, a two-process demo run, and a headless walkthrough
 with 4 inspected screenshots.
 
-## Addendum — 19 November 2026: PRO-DEV round (builder-written, zero Kiro calls)
+## Addendum, 19 November 2026: PRO-DEV round (builder-written, zero Kiro calls)
 
 After the live and federation layers were verified, the entry was
 hardened in a PRO-DEV round, written directly by the builder:
@@ -142,17 +142,17 @@ hardened in a PRO-DEV round, written directly by the builder:
 - **PBKDF2 passcode hashing** (600,000 iterations, per-account salt),
   with automatic migration of legacy single-round SHA-256 hashes on
   the next successful login.
-- **Federated edit/delete** — new `edit` and `tombstone` log entries
+- **Federated edit/delete**: new `edit` and `tombstone` log entries
   with CRDT-style semantics (last-writer-wins edits, delete-wins,
   idempotent, pending-queue resolution), author-only, archive posts
   immutable.
-- **Federated Hall of Fame** — `score` entries through the same log,
+- **Federated Hall of Fame**: `score` entries through the same log,
   appended only via the existing victory path; local vs network
   sections with per-node attribution.
-- **Public read-only archive** (`/archive`) — the same data as the JSON
+- **Public read-only archive** (`/archive`): the same data as the JSON
   API, no login, no write path.
-- **Node Status screen** (menu item 7) — real sync-engine state.
-- **Width-aware live frames** — the wrap-fragment display defect fixed.
+- **Node Status screen** (menu item 7): real sync-engine state.
+- **Width-aware live frames**: the wrap-fragment display defect fixed.
 - **Accessibility pass** on the web shell (skip link, live status,
   labels, focus ring) and a full headless UX audit with 11 inspected
   screenshots.
@@ -177,7 +177,7 @@ round was ordered to replace; all other prior tests pass untouched.
 
 **Generated by Kiro** (never hand-edited):
 
-- All of `.kiro/` — steering (4 files), spec (3 files), hooks (2 files)
+- All of `.kiro/`, steering (4 files), spec (3 files), hooks (2 files)
 - `src/game/catacomb.ts`
 - `tests/game/catacomb.test.ts`
 - `src/shared/types.ts` (unprompted creation during K4, disclosed above)
@@ -186,9 +186,9 @@ round was ordered to replace; all other prior tests pass untouched.
 
 - The blueprint, the scaffold, and all other source code and tests
 - The web client, the file-area content, and the 1994 archive seeds
-- The LIVE BOARD and FEDERATION layers (19 Nov 2026, zero Kiro calls —
+- The LIVE BOARD and FEDERATION layers (19 Nov 2026, zero Kiro calls,
   see the addendum above)
-- The PRO-DEV round (19 Nov 2026, zero Kiro calls — see the addendum
+- The PRO-DEV round (19 Nov 2026, zero Kiro calls, see the addendum
   above)
 - `README.md`, `docs/SUBMISSION.md`, and this log
 - All verification: test runs, production builds, headless walkthroughs,
