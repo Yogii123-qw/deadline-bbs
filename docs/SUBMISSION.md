@@ -103,8 +103,8 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
    (ports 8081/8082, telnet 2324/2325): post on one, read it on the
    other.
 
-**Demo video:** recorded (v3, 172.93 s, 8 shots; file in the audit folder, upload to YouTube still pending; shot list and narration outline in
-`docs/DEMO-SCRIPT.md`; must be under 3 minutes, public on YouTube.)
+**Demo video:** uploaded to public YouTube (v5, 173 s, 8 shots; https://youtu.be/IhImj3ZT95U; verified live 19 Nov 14:31 WIB: public, channel Bruno Srna, 173 s, title and description with chapters correct; file in the audit folder; shot list and narration outline in
+`docs/DEMO-SCRIPT.md`; under 3 minutes, public on YouTube.)
 
 ## Evidence checklist (all verified mechanically by the builder)
 
@@ -155,7 +155,7 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
       the new layers and the PRO-DEV round
 - [x] `/.kiro` at the repo root, tracked by git, NOT gitignored
 - [x] Apache-2.0 license; public on GitHub since 19 Nov 2026; no `.env`; no secrets
-- [ ] Demo video upload (< 3 min, public YouTube): **recorded (v3), upload needs Monch**
+- [x] Demo video upload (< 3 min, public YouTube): **DONE 19 Nov 2026, https://youtu.be/IhImj3ZT95U (v5, 173 s, public, verified live 19 Nov 14:31 WIB)**
 - [ ] Public hosting: **needs Monch's decision**
 - [ ] Devpost submission: **unblocked, account restored 19 Nov 2026**
 
@@ -185,7 +185,7 @@ Kiro created, is in `KIRO-USAGE.md` in the repository. Nothing in
 
 1. **Public push** of this repo: **done 19 Nov 2026** (public on GitHub).
 2. **Hosting** for the demo link.
-3. **Demo video** under 3 minutes on public YouTube: **recorded (v3), upload needs Monch**.
+3. **Demo video** under 3 minutes on public YouTube: **DONE 19 Nov 2026, https://youtu.be/IhImj3ZT95U (v5, 173 s, public, verified live 19 Nov 14:31 WIB)**.
 4. **Devpost submit** before Sat 5 Dec 2026 05:00 WIB. The account was restored 19 Nov 2026 (Devpost Support removed the flag; confirmed by the owner), so submission is unblocked.
 5. **Kiro credits**: Monch handles the 4,000-credit request himself
    (his decision); request deadline Wed 2 Dec 2026 03:00 WIB.
