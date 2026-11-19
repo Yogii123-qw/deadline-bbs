@@ -121,7 +121,7 @@ describe('read-only JSON API', () => {
     await c.waitForPlain(body);
     expect(c.plain).toContain(subject);
     expect(c.plain).toContain('Alice');
-  }, 10000);
+  }, 30000);
 
   it('rejects non-GET methods on read endpoints', async () => {
     const node = await boot({ nodeId: 'node-api' });
@@ -174,7 +174,7 @@ describe('public SSE event stream', () => {
       controller.abort();
       await pump;
     }
-  }, 10000);
+  }, 30000);
 });
 
 describe('sync endpoint authentication', () => {

@@ -102,7 +102,7 @@ describe('federation between real nodes', () => {
     expect(thread?.posts[0].body).toBe('hello from node A');
     await observer.waitForPlain('posted "Federated Hello"');
     expect(observer.plain).toContain('(via node node-a)');
-  }, 10000);
+  }, 30000);
 
   it('(b) a post on B appears on A', async () => {
     const a = await boot({ nodeId: 'node-a' });
@@ -115,7 +115,7 @@ describe('federation between real nodes', () => {
     expect(threads.find((t) => t.subject === 'Hello From B')?.posts[0].body).toBe(
       'hello from node B',
     );
-  }, 10000);
+  }, 30000);
 
   it('(c) B offline, post on A, B restarts: the queued post arrives exactly once', async () => {
     const a = await boot({ nodeId: 'node-a' });
@@ -159,7 +159,7 @@ describe('federation between real nodes', () => {
     const result = await b.engine.applyRemote(log.entries);
     expect(result).toMatchObject({ applied: 0, duplicates: 1 });
     expect((await userThreads(b)).filter((t) => t.subject === 'Twice Synced')).toHaveLength(1);
-  }, 10000);
+  }, 30000);
 
   it('(e) a 3-node ring converges, stays stable, and terminates', async () => {
     const a = await boot({ nodeId: 'node-a' });

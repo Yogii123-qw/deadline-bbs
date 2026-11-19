@@ -6,9 +6,13 @@ import * as net from 'node:net';
 import { WebSocket } from 'ws';
 import { stripAnsi } from '../../src/telnet/ansi.js';
 
+// Socket waits default to 20s, not 5s: a PBKDF2 login (~2.9s per hash
+// on a slow machine) can push registration past 5s under suite load,
+// which failed live.test.ts in the 19 Nov 2026 audit with a waitFor
+// timeout even though the server answered correctly.
 export async function waitFor(
   check: () => boolean,
-  timeoutMs = 5000,
+  timeoutMs = 20000,
   label = 'condition',
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -63,11 +67,11 @@ export class RawTelnetClient {
     this.socket?.write(Buffer.from(bytes));
   }
 
-  public async waitFor(needle: string, timeoutMs = 5000): Promise<void> {
+  public async waitFor(needle: string, timeoutMs = 20000): Promise<void> {
     await waitFor(() => this.text.includes(needle), timeoutMs, `telnet output ${JSON.stringify(needle)}`);
   }
 
-  public async waitForPlain(needle: string, timeoutMs = 5000): Promise<void> {
+  public async waitForPlain(needle: string, timeoutMs = 20000): Promise<void> {
     await waitFor(() => this.plain.includes(needle), timeoutMs, `telnet text ${JSON.stringify(needle)}`);
   }
 
@@ -118,11 +122,11 @@ export class WsClient {
     this.ws?.send(text);
   }
 
-  public async waitFor(needle: string, timeoutMs = 5000): Promise<void> {
+  public async waitFor(needle: string, timeoutMs = 20000): Promise<void> {
     await waitFor(() => this.text.includes(needle), timeoutMs, `ws output ${JSON.stringify(needle)}`);
   }
 
-  public async waitForPlain(needle: string, timeoutMs = 5000): Promise<void> {
+  public async waitForPlain(needle: string, timeoutMs = 20000): Promise<void> {
     await waitFor(() => this.plain.includes(needle), timeoutMs, `ws text ${JSON.stringify(needle)}`);
   }
 
