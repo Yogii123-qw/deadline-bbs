@@ -132,7 +132,7 @@ export function splashScreen(width: number = DEFAULT_WIDTH): string {
       centerLine(`${color(33)}THE BOARD THAT REFUSES TO DIE${reset()}`, width),
       '',
       centerLine('Est. 1994 · Still answering.', width),
-      centerLine('Kiroween 2026 — Resurrection', width),
+      centerLine('Kiroween 2026: Resurrection', width),
       '',
       rule(width),
     ];
@@ -148,7 +148,7 @@ export function splashScreen(width: number = DEFAULT_WIDTH): string {
     centerLine(`${color(33)}THE BULLETIN BOARD SYSTEM THAT REFUSES TO DIE${reset()}`, width),
     '',
     centerLine('Est. 1994 · One node · Still answering.', width),
-    centerLine('Kiroween 2026 — Resurrection', width),
+    centerLine('Kiroween 2026: Resurrection', width),
     '',
     rule(width),
   ];
@@ -167,18 +167,18 @@ export function mainMenu(handle: string, elapsed: string, width: number = DEFAUL
       : [`  Welcome back, ${bold()}${handle}${reset()}.  Call time: ${elapsed}`];
   return [
     '',
-    bar('DEADLINE BBS — MAIN MENU', width),
+    bar('DEADLINE BBS: MAIN MENU', width),
     `${color(36)}└${'─'.repeat(Math.max(0, width - 2))}┘${reset()}`,
     '',
     ...greeting,
     '',
     `  ${color(33)}1${reset()}  Message Boards`,
     `  ${color(33)}2${reset()}  File Area`,
-    `  ${color(33)}3${reset()}  CATACOMB — door game`,
+    `  ${color(33)}3${reset()}  CATACOMB: door game`,
     `  ${color(33)}4${reset()}  Hall of Fame`,
     `  ${color(33)}5${reset()}  Who's Online`,
     `  ${color(33)}6${reset()}  Chat with a caller online`,
-    `  ${color(33)}7${reset()}  Node Status — federation, live`,
+    `  ${color(33)}7${reset()}  Node Status: federation, live`,
     `  ${color(33)}G${reset()}  Goodbye (log off)`,
     '',
     'Choice: ',
@@ -303,7 +303,7 @@ export function searchResultsScreen(
   }
   results.forEach((r, i) => {
     const archive = r.isArchive ? ` ${color(35)}[ARCHIVE - 1994]${reset()}` : '';
-    lines.push(`  ${color(33)}${i + 1}${reset()}  ${r.subject} — ${r.boardName}${archive}`);
+    lines.push(`  ${color(33)}${i + 1}${reset()}  ${r.subject} (${r.boardName})${archive}`);
     lines.push(`       by ${r.authorHandle} · ${r.excerpt}`);
   });
   lines.push('');
@@ -326,7 +326,7 @@ export function fileListScreen(
     lines.push('  No files yet.');
   }
   files.forEach((file, i) => {
-    const desc = file.description === '' ? '' : ` — ${file.description}`;
+    const desc = file.description === '' ? '' : `: ${file.description}`;
     lines.push(`  ${color(33)}${i + 1}${reset()}  ${file.name} (${file.sizeBytes} bytes)${desc}`);
   });
   lines.push('');
@@ -402,8 +402,8 @@ export function combatScreen(
     '',
     bar(`COMBAT: ${monster.name.toUpperCase()}`, width),
     '',
-    `  ${bold()}${monster.name}${reset()} — HP ${monster.hp} · ATK ${monster.attack} · DEF ${monster.defense}${monster.isFinalBoss ? ` ${color(31)}FINAL BOSS${reset()}` : ''}`,
-    `  You — HP ${hpBar(character.hp, character.maxHp)} · ATK ${character.attack} · DEF ${character.defense}`,
+    `  ${bold()}${monster.name}${reset()}: HP ${monster.hp} · ATK ${monster.attack} · DEF ${monster.defense}${monster.isFinalBoss ? ` ${color(31)}FINAL BOSS${reset()}` : ''}`,
+    `  You: HP ${hpBar(character.hp, character.maxHp)} · ATK ${character.attack} · DEF ${character.defense}`,
     '',
   ];
   if (lastResult !== null) {
@@ -421,7 +421,7 @@ export function hallOfFameScreen(
   width: number = DEFAULT_WIDTH,
   network: NetworkScore[] = [],
 ): string {
-  const lines = ['', bar('HALL OF FAME — CRYPT LORD SLAYERS', width), ''];
+  const lines = ['', bar('HALL OF FAME: CRYPT LORD SLAYERS', width), ''];
   if (entries.length === 0 && network.length === 0) {
     lines.push('  The Hall of Fame is empty. No one has slain the Crypt Lord yet.');
     lines.push('  The dungeon waits.');
@@ -432,16 +432,16 @@ export function hallOfFameScreen(
     }
     entries.forEach((entry, i) => {
       lines.push(
-        `  ${color(33)}${i + 1}.${reset()}  ${bold()}${entry.handle}${reset()} — level ${entry.level} · ${entry.timestamp.slice(0, 10)}`,
+        `  ${color(33)}${i + 1}.${reset()}  ${bold()}${entry.handle}${reset()}, level ${entry.level} · ${entry.timestamp.slice(0, 10)}`,
       );
     });
   }
   if (network.length > 0) {
     lines.push('');
-    lines.push(`  ${color(36)}THE NETWORK — victories from other nodes${reset()}`);
+    lines.push(`  ${color(36)}THE NETWORK: victories from other nodes${reset()}`);
     network.forEach((entry, i) => {
       lines.push(
-        `  ${color(33)}${i + 1}.${reset()}  ${bold()}${entry.handle}${reset()} — level ${entry.level} · ${entry.timestamp.slice(0, 10)} · node ${entry.originNode}`,
+        `  ${color(33)}${i + 1}.${reset()}  ${bold()}${entry.handle}${reset()}, level ${entry.level} · ${entry.timestamp.slice(0, 10)} · node ${entry.originNode}`,
       );
     });
   }
@@ -463,7 +463,7 @@ export function nodeStatusScreen(
 ): string {
   const when = (iso: string | null): string =>
     iso === null ? 'never' : iso.slice(0, 19).replace('T', ' ');
-  const lines = ['', bar('NODE STATUS — FEDERATION', width), ''];
+  const lines = ['', bar('NODE STATUS: FEDERATION', width), ''];
   lines.push(`  Node: ${stats.nodeId}`);
   lines.push(`  Peers: ${stats.peerCount}`);
   lines.push(`  Sync log: ${stats.entryCount} ${stats.entryCount === 1 ? 'entry' : 'entries'} · ${stats.pendingCount} pending`);
@@ -471,7 +471,7 @@ export function nodeStatusScreen(
   lines.push(
     stats.secretSet
       ? '  Sync secret: SET'
-      : `  Sync secret: ${color(31)}OPEN — any peer may exchange${reset()}`,
+      : `  Sync secret: ${color(31)}OPEN: any peer may exchange${reset()}`,
   );
   lines.push('');
   if (stats.peers.length === 0) {
@@ -550,7 +550,7 @@ export function chatHelpScreen(
   sessions: ActiveSession[],
   width: number = DEFAULT_WIDTH,
 ): string {
-  const lines = ['', bar('CHAT — LIVE, CALLER TO CALLER', width), ''];
+  const lines = ['', bar('CHAT: LIVE, CALLER TO CALLER', width), ''];
   lines.push('  Send a private message to a caller who is online right now.');
   lines.push('  Usage: 6 <handle> <message>');
   lines.push('');
@@ -560,7 +560,7 @@ export function chatHelpScreen(
     lines.push(`  ${sessions.length} callers online:`);
     lines.push('');
     for (const s of sessions) {
-      lines.push(`  ${bold()}${s.handle}${reset()} — ${s.transport}`);
+      lines.push(`  ${bold()}${s.handle}${reset()} (${s.transport})`);
     }
   }
   lines.push('');
@@ -585,13 +585,13 @@ export function whoOnlineScreen(
     lines.push('  You are the only caller online. The line is yours.');
     lines.push('');
     const s = sessions[0];
-    lines.push(`  ${bold()}${s.handle}${reset()} — ${s.transport} · connected ${formatElapsed(s.connectedAt.toISOString(), now)} ago`);
+    lines.push(`  ${bold()}${s.handle}${reset()} (${s.transport}) · connected ${formatElapsed(s.connectedAt.toISOString(), now)} ago`);
   } else {
     lines.push(`  ${sessions.length} callers online:`);
     lines.push('');
     for (const s of sessions) {
       lines.push(
-        `  ${bold()}${s.handle}${reset()} — ${s.transport} · connected ${formatElapsed(s.connectedAt.toISOString(), now)} ago`,
+        `  ${bold()}${s.handle}${reset()} (${s.transport}) · connected ${formatElapsed(s.connectedAt.toISOString(), now)} ago`,
       );
     }
   }

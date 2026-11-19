@@ -30,7 +30,7 @@ WHY IT MATTERED
 ---------------
 One phone line meant one caller. If someone was online, you got
 a busy signal and tried again. Scarcity made every call feel
-like an event — and made sysops the most patient people alive.
+like an event, and made sysops the most patient people alive.
 
 DeadLine BBS keeps the rituals and drops the busy signal: the
 telnet port answers every caller, and the web terminal answers

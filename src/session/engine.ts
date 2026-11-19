@@ -390,7 +390,7 @@ async function handleChatCommand(
   const targetName = space === -1 ? rest : rest.slice(0, space);
   const rawMessage = space === -1 ? '' : rest.slice(space + 1);
   if (rawMessage.trim() === '') {
-    throw new ValidationError('Usage: 6 <handle> <message> — include a message to send.');
+    throw new ValidationError('Usage: 6 <handle> <message>. Include a message to send.');
   }
   const message = validateChatMessage(rawMessage);
   if (state.handle !== null && targetName.toLowerCase() === state.handle.toLowerCase()) {
@@ -1488,7 +1488,7 @@ async function finishEdit(
   const note =
     status === 'applied'
       ? 'Post edited.'
-      : 'Post edited — but a newer edit from the network already stands.';
+      : 'Post edited, but a newer edit from the network already stands.';
   return {
     state: next,
     output: `\n  ${note}\n${await threadViewOutput(next, deps)}`,

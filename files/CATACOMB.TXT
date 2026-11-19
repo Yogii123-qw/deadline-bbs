@@ -1,4 +1,4 @@
-CATACOMB — GAME MANUAL
+CATACOMB: GAME MANUAL
 ======================
 
 You are standing at the mouth of a dungeon that has been waiting
@@ -12,14 +12,14 @@ you are out of turns, the dungeon closes until tomorrow.
 
 ACTIONS
 -------
-E — Explore the current level. You may find gold, or something
+E: Explore the current level. You may find gold, or something
     with teeth. 6 in 10 explores end in a fight.
-D — Descend to the next level. Monsters get stronger the deeper
+D: Descend to the next level. Monsters get stronger the deeper
     you go. The Crypt Lord waits at depth 5.
-R — Rest. Recover a third of your maximum health. Safe, but the
+R: Rest. Recover a third of your maximum health. Safe, but the
     turn is still spent.
-S — Show your status again.
-Q — Leave the dungeon. Your character is saved exactly as-is.
+S: Show your status again.
+Q: Leave the dungeon. Your character is saved exactly as-is.
 
 COMBAT
 ------
@@ -29,12 +29,12 @@ survives, it strikes back. Defeated monsters drop experience and
 gold. Level up and you grow tougher: more health, more attack,
 more defense, fully healed.
 
-A — Attack.   F — Flee (free, no shame in it).
+A: Attack.   F: Flee (free, no shame in it).
 
 DEATH AND VICTORY
 -----------------
 If your health reaches zero, you die. Your character restarts
-from level 1 — but the turns you already spent today stay spent.
+from level 1, but the turns you already spent today stay spent.
 Deaths are not recorded anywhere.
 
 Defeat the Crypt Lord at depth 5 and your name enters the Hall

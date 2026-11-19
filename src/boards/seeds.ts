@@ -144,7 +144,7 @@ export function seedBoardsData(): BoardsData {
       {
         id: 'seed-thread-5',
         boardId: 'games',
-        subject: 'LORD high scores — June',
+        subject: 'LORD high scores, June',
         authorHandle: 'NightOwl',
         createdAt: '1994-06-30T23:58:00.000Z',
         posts: [
@@ -153,7 +153,7 @@ export function seedBoardsData(): BoardsData {
             threadId: 'seed-thread-5',
             boardId: 'games',
             authorHandle: 'NightOwl',
-            subject: 'LORD high scores — June',
+            subject: 'LORD high scores, June',
             body: 'Final standings for June. Red Dragon slain twice, both times by VioletStorm. The rest of us are still grinding the forest.\n\nNew season starts July 1. Same rules: no sharing accounts, no begging the sysop for extra turns.',
             createdAt: '1994-06-30T23:58:00.000Z',
             isArchive: true,

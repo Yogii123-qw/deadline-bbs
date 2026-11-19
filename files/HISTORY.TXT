@@ -1,31 +1,31 @@
 A SHORT HISTORY OF THE BULLETIN BOARD SYSTEM
 ==========================================
 
-1978 — THE FIRST CALL
+1978: THE FIRST CALL
 The first public dial-up BBS, CBBS, went online on 16 February
 1978 in Chicago, built by Ward Christensen and Randy Suess.
 One computer, one modem, one caller at a time.
 
-1980s — THE SCENE GROWS
+1980s: THE SCENE GROWS
 Boards spread wherever phone lines reached. FidoNet (1984) let
 boards exchange mail overnight, when long-distance rates dropped.
 ANSI art turned 80x25 text screens into galleries. Door games
 like TradeWars and Legend of the Red Dragon gave callers a
 reason to dial in every single day.
 
-1994 — THE PEAK
+1994: THE PEAK
 InfoWorld estimated about 60,000 BBSes serving 17 million users
 in the United States alone. For most people, a BBS was the first
 online community they ever belonged to.
 
-1995 — THE CRASH
+1995: THE CRASH
 Cheap dial-up internet access and the Mosaic web browser caused
 what historians describe as a rapid crash in the BBS market
 starting in late 1994, and the sudden obsolescence of bulletin
 board technology in 1995. The phone lines went quiet within
 a couple of years.
 
-TODAY — THE REFUSAL
+TODAY: THE REFUSAL
 The BBS never fully died. The Telnet BBS Guide listed about
 1,046 boards as of June 2026, reachable over telnet instead of
 modems. DeadLine BBS joins them: the same rituals, the same

@@ -195,7 +195,7 @@ describe('engine: live chat', () => {
     const b = new SessionDriver(env.deps);
     await b.register('Bob', 'pass1234');
     const out = await a.sendText('6');
-    expect(out).toContain('CHAT — LIVE, CALLER TO CALLER');
+    expect(out).toContain('CHAT: LIVE, CALLER TO CALLER');
     expect(out).toContain('6 <handle> <message>');
     expect(out).toContain('Bob');
     expect(out).toContain('MAIN MENU');
